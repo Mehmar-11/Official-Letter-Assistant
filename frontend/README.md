@@ -1,67 +1,79 @@
-# 🎨 Official Letter Assistant (Frontend)
+# Official Letter Assistant (Frontend)
 
-## 📌 Overview
-React frontend for an AI tool that helps users understand German official letters by turning them into simple, structured explanations.
+## Overview
 
-Users can paste text or upload a PDF, and the system sends it to a backend API for AI analysis.
+This is the frontend application for the Official Letter Assistant project.  
+It is a React-based interface that allows users to input German official letters either by pasting text or uploading PDF files. The input is sent to a backend API for structured AI-based analysis.
+
+The system is designed to help users understand complex official German documents by generating simplified explanations.
 
 ---
 
-## 🚀 Features
-- ✍️ Paste German official letters
-- 📄 Upload PDF (UI ready)
-- 🧠 Send data to backend API
-- 📊 View AI results:
-  - Summary
-  - Deadlines
+## Features
+
+- Input German official letters via text or PDF upload
+- Send input data to backend API for processing
+- Display structured AI-generated results including:
+  - Summary of the letter
+  - Important deadlines
   - Required actions
-  - Risky / unclear parts
-- 🎨 Modern glassmorphism UI
-- 📡 Loading + scanning animation
-- ✨ Typewriter effect for summary
+  - Unclear or risky sections
+- Modern UI with glassmorphism design
+- Loading and processing animation
+- Typewriter effect for displaying AI-generated summary
 
 ---
 
-## ⚙️ Tech Stack
+## Technology Stack
+
 - React (Vite)
-- JavaScript
+- JavaScript (ES6+)
 - CSS (custom styling)
-- Fetch API
+- Fetch API for backend communication
 
 ---
 
-## 🔗 Backend Connection
-The frontend connects to:
+## Backend Integration
 
-`POST http://localhost:8000/analyze-text`
+The frontend communicates with the backend using the following endpoint:
 
-### Request:
-```json id="onepage2"
+POST http://localhost:8000/analyze-text
+
+### Request Format
+
+```json id="doc2"
 {
   "letter_text": "German official letter text here..."
 }
-Response:
+Response Format
 {
   "summary": "...",
   "deadlines": [],
   "required_actions": [],
   "unclear_or_risky_parts": []
 }
-▶️ Run Project
+Setup Instructions
+
+Install dependencies:
+
 npm install
+
+Start development server:
+
 npm run dev
 
-Open:
+The application will be available at:
 
 http://localhost:5173
-📁 Structure
+
+Project Structure
 src/
- ├── App.jsx
- ├── main.jsx
- ├── index.css
- └── assets/
-🚧 Status
-UI complete
-Backend integration ready
-PDF backend processing pending
-Final testing in progress
+├── App.jsx
+├── main.jsx
+├── index.css
+└── assets/
+Current Status
+Frontend user interface completed
+Backend API integration implemented
+PDF upload UI implemented (backend processing pending)
+Full system integration testing in progress
