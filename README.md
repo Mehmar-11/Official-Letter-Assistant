@@ -19,11 +19,16 @@ Official-Letter-Assistant/
 
 - GitHub repository is set up.
 - Basic `frontend/` and `backend/` folders are created.
-- Backend has an initial FastAPI skeleton.
+- Backend has an initial FastAPI structure with schemas, routes, and services.
 - Test endpoints are available: `GET /` and `GET /health`.
 - First analysis endpoint is available: `POST /analyze-text`.
-- The analysis endpoint currently returns a temporary structured response based on the MVP response schema.
-- LLM-based analysis will be added in the next implementation step.
+- The MVP response schema for letter analysis is defined.
+- The backend includes an `llm_service` with:
+  - the first version of the letter-analysis prompt
+  - environment-based API key configuration
+  - a mock fallback response for development
+- Real LLM provider integration is not connected yet.
+- Frontend work is being developed separately and will be connected to the backend in a later step.
 
 ## Backend API
 
@@ -53,9 +58,10 @@ Response fields:
 Current behavior:
 
 - The endpoint accepts `letter_text` as input.
-- It returns a temporary structured response for testing.
-- The response format is the planned MVP structure for letter analysis.
-- Real LLM-based analysis is not connected yet.
+- The request is handled through the backend service layer.
+- The analysis flow currently uses a mock structured response if no real LLM API key/provider is configured.
+- The mock response follows the planned MVP response schema.
+- Real LLM-based analysis will be added after the provider/API key decision is finalized.
 
 ## Planned Tech Stack
 
