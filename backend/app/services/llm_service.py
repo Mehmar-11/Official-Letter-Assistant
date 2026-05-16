@@ -1,7 +1,11 @@
+import json
 import os
 from typing import Any, Dict
 
 from dotenv import load_dotenv
+from pydantic import ValidationError
+
+from app.schemas.analysis import AnalyzeTextResponse
 
 
 load_dotenv()
@@ -75,6 +79,36 @@ def build_letter_analysis_prompt(letter_text: str) -> str:
     Build the final prompt for analyzing one German official letter.
     """
     return LETTER_ANALYSIS_PROMPT.replace("{{LETTER_TEXT}}", letter_text)
+
+def get_analysis_response_schema() -> Dict[str, Any]:
+    """
+    Return the JSON schema for the expected letter analysis response.
+
+    AnalyzeTextResponse is the single source of truth for the backend response
+    structure. This schema can later be passed to an LLM provider that supports
+    structured output / JSON schema responses.
+    """
+    return AnalyzeTextResponse.model_json_schema()
+
+def parse_and_validate_llm_response(raw_response: str) -> Dict[str, Any]:
+    """
+    Parse a raw JSON string returned by the LLM and validate it against
+    the backend response schema.
+
+    This prevents invalid or incomplete LLM output from being sent directly
+    to the frontend.
+    """
+    try:
+        parsed_response = json.loads(raw_response)
+    except json.JSONDecodeError as exc:
+        raise ValueError("LLM response is not valid JSON.") from exc
+
+    try:
+        validated_response = AnalyzeTextResponse(**parsed_response)
+    except ValidationError as exc:
+        raise ValueError("LLM response does not match the expected schema.") from exc
+
+    return validated_response.model_dump()
 
 
 def get_mock_letter_analysis() -> Dict[str, Any]:
