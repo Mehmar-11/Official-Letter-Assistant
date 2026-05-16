@@ -20,7 +20,7 @@ export default function App() {
     }, 15);
   };
 
-  // API call (text only for now)
+  // API call
   const analyzeLetter = async () => {
     setLoading(true);
     setResult(null);
@@ -37,7 +37,8 @@ export default function App() {
       setResult(data);
       typeText(data.summary || "", setAnimatedSummary);
     } catch (err) {
-      console.error(err);
+      console.error("Backend error:", err);
+      alert("Backend connection failed");
     }
 
     setLoading(false);
@@ -58,7 +59,6 @@ export default function App() {
         <div style={styles.leftPanel}>
           <div style={styles.panelTitle}>Input Document</div>
 
-          {/* MODE SWITCH */}
           <div style={styles.switchRow}>
             <button
               onClick={() => setMode("text")}
@@ -75,7 +75,6 @@ export default function App() {
             </button>
           </div>
 
-          {/* TEXT INPUT */}
           {mode === "text" ? (
             <textarea
               value={text}
@@ -84,21 +83,15 @@ export default function App() {
               style={styles.textarea}
             />
           ) : (
-            /* PDF UPLOAD */
             <div
               style={styles.dropZone}
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => {
                 e.preventDefault();
-                const droppedFile = e.dataTransfer.files[0];
-                setFile(droppedFile);
+                setFile(e.dataTransfer.files[0]);
               }}
             >
-              <div>📁 Drag & Drop PDF here</div>
-
-              <div style={{ fontSize: "12px", color: "#9ca3af" }}>
-                or click to select file
-              </div>
+              <div>Drop PDF here</div>
 
               <input
                 type="file"
@@ -108,15 +101,18 @@ export default function App() {
               />
 
               {file && (
-                <div style={{ marginTop: "10px", color: "#22c55e" }}>
-                  Selected: {file.name}
+                <div style={{ marginTop: 10, color: "#22c55e" }}>
+                  {file.name}
                 </div>
               )}
             </div>
           )}
 
-          {/* BUTTON */}
-          <button onClick={analyzeLetter} style={styles.analyzeBtn}>
+          <button
+            onClick={analyzeLetter}
+            style={styles.analyzeBtn}
+            disabled={loading}
+          >
             {loading ? "Analyzing..." : "Analyze Document"}
           </button>
         </div>
@@ -127,20 +123,38 @@ export default function App() {
 
           {loading && (
             <div style={styles.scanning}>
-              Scanning document...
+              Processing document...
             </div>
           )}
 
+          {/* TIMELINE (REALISTIC) */}
           <div style={styles.timeline}>
             <div>Document received</div>
-            <div>Extracting text</div>
-            <div>Cleaning data</div>
-            <div>AI analysis running</div>
+            <div>Preparing document text</div>
+            <div>Structured analysis running</div>
+            <div>Generating response</div>
+          </div>
+
+          {/* OVERVIEW */}
+          <div style={styles.card}>
+            <div style={styles.label}>Sender</div>
+            <div>{result?.sender || "—"}</div>
+          </div>
+
+          <div style={styles.card}>
+            <div style={styles.label}>Letter Topic</div>
+            <div>{result?.letter_topic || "—"}</div>
           </div>
 
           <div style={styles.card}>
             <div style={styles.label}>Summary</div>
             <div>{animatedSummary || "Waiting..."}</div>
+          </div>
+
+          {/* INFORMATION */}
+          <div style={styles.card}>
+            <div style={styles.label}>Important Information</div>
+            <div>{result?.important_information?.join(", ") || "—"}</div>
           </div>
 
           <div style={styles.card}>
@@ -149,13 +163,30 @@ export default function App() {
           </div>
 
           <div style={styles.card}>
+            <div style={styles.label}>Payment Information</div>
+            <div>{result?.payment_information?.join(", ") || "—"}</div>
+          </div>
+
+          {/* ACTIONS */}
+          <div style={styles.card}>
             <div style={styles.label}>Required Actions</div>
             <div>{result?.required_actions?.join(", ") || "—"}</div>
           </div>
 
           <div style={styles.card}>
-            <div style={styles.label}>Risky Parts</div>
+            <div style={styles.label}>Next Steps</div>
+            <div>{result?.next_steps?.join(", ") || "—"}</div>
+          </div>
+
+          {/* WARNINGS */}
+          <div style={styles.card}>
+            <div style={styles.label}>Unclear or Risky Parts</div>
             <div>{result?.unclear_or_risky_parts?.join(", ") || "—"}</div>
+          </div>
+
+          <div style={styles.card}>
+            <div style={styles.label}>Safety Note</div>
+            <div>{result?.safety_note || "—"}</div>
           </div>
         </div>
       </div>
@@ -241,7 +272,6 @@ const styles = {
     border: "2px dashed #6366f1",
     textAlign: "center",
     position: "relative",
-    cursor: "pointer",
   },
 
   hiddenFile: {
@@ -251,7 +281,6 @@ const styles = {
     height: "100%",
     top: 0,
     left: 0,
-    cursor: "pointer",
   },
 
   analyzeBtn: {
