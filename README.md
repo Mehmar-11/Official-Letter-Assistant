@@ -1,34 +1,34 @@
 # Official Letter Assistant
 
-Official Letter Assistant is an LLM-based web application that helps non-native German speakers understand German official letters through clear, structured explanations.
+Official Letter Assistant is an LLM-based web application that helps users understand German official letters through clear, structured explanations.
+
+The project focuses on practical information such as deadlines, required actions, payment information, unclear or risky parts, and safe next steps. It is designed as a structured document-understanding assistant, not a generic chatbot.
 
 ## Project Structure
 
+```text
 Official-Letter-Assistant/
 ├── frontend/   # React frontend
 ├── backend/    # FastAPI backend
+├── Docs/       # Project and technical documentation
 └── README.md
-
-## Responsibilities
-
-- Frontend work should be done inside `frontend/`.
-- Backend work should be done inside `backend/`.
-- Shared files, such as this README, should be changed after team coordination.
+```
 
 ## Current Status
 
-- GitHub repository is set up.
-- Basic `frontend/` and `backend/` folders are created.
-- Backend has an initial FastAPI structure with schemas, routes, and services.
+- React frontend and FastAPI backend are created.
+- Backend has a modular structure with schemas, routes, and services.
 - Test endpoints are available: `GET /` and `GET /health`.
-- First analysis endpoint is available: `POST /analyze-text`.
-- The MVP response schema for letter analysis is defined.
-- The backend includes an `llm_service` with:
-  - the first version of the letter-analysis prompt
-  - environment-based API key configuration
-  - a mock fallback response for development
+- Text analysis endpoint is available: `POST /analyze-text`.
+- Text-based PDF analysis endpoint is available: `POST /analyze-pdf`.
+- The MVP response schema for structured letter analysis is defined.
+- Backend includes:
+  - `analysis_service` for the analysis flow
+  - `llm_service` for prompt handling, mock fallback, and structured response preparation
+  - `pdf_service` for text-based PDF extraction
+- Frontend-backend local connection works with the current mock response.
+- Synthetic development sample letters are available for testing.
 - Real LLM provider integration is not connected yet.
-- Frontend work is being developed separately and will be connected to the backend in a later step.
 
 ## Backend API
 
@@ -38,11 +38,21 @@ Receives German official letter text and returns a structured analysis response.
 
 Request body:
 
+```json
 {
   "letter_text": "Sehr geehrte Frau Müller..."
 }
+```
 
-Response fields:
+### `POST /analyze-pdf`
+
+Receives a text-based PDF file, extracts readable text, and returns the same structured analysis response.
+
+Current PDF support is limited to text-based PDFs. Scanned or image-based PDFs are not processed with OCR in the current MVP.
+
+## MVP Response Fields
+
+Both `/analyze-text` and `/analyze-pdf` return the same response structure:
 
 - `sender`
 - `letter_topic`
@@ -55,13 +65,25 @@ Response fields:
 - `next_steps`
 - `safety_note`
 
-Current behavior:
+## Privacy and Safety
 
-- The endpoint accepts `letter_text` as input.
-- The request is handled through the backend service layer.
-- The analysis flow currently uses a mock structured response if no real LLM API key/provider is configured.
-- The mock response follows the planned MVP response schema.
-- Real LLM-based analysis will be added after the provider/API key decision is finalized.
+- No real private letters should be committed to GitHub.
+- Synthetic sample letters are used for development and testing.
+- Uploaded letter text and PDF files are not permanently stored by the backend.
+- API keys are stored locally in `.env` and are not committed to the repository.
+- The assistant explains letter content but does not provide legal advice.
+
+## Documentation
+
+Additional documentation is available in:
+
+```text
+Docs/technical-decisions.md
+backend/sample_letters/README.md
+backend/sample_letters/dev/README.md
+```
+
+These files document technical decisions, testing strategy, privacy rules, and the purpose of synthetic sample letters.
 
 ## Planned Tech Stack
 
@@ -70,6 +92,14 @@ Current behavior:
 - PDF processing: pdfplumber
 - LLM: API-based model with structured output
 - Deployment: simple cloud hosting, such as Vercel for frontend and Render for backend
+
+## Current Limitations
+
+- Real LLM provider integration is not connected yet.
+- The current analysis response is still a mock response.
+- OCR for scanned or image-based PDFs is not supported in the MVP.
+- Demo and hold-out evaluation samples are not finalized yet.
+- Follow-up Q&A is planned only after the main analysis flow is stable.
 
 ## Course
 

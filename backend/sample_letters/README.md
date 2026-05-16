@@ -4,6 +4,8 @@ This folder contains synthetic sample letters for developing and testing the Off
 
 The sample letters must not contain real personal data. They should use placeholder names, addresses, case numbers, payment references, and other identifiers.
 
+Some sample letters may also have text-based PDF versions for testing PDF extraction. These PDFs must also be fully synthetic and must not contain real personal data.
+
 ## Folder Structure
 
 ### `dev/`

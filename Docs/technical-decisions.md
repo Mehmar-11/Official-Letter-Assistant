@@ -17,7 +17,7 @@ The system should help users identify practical information from a letter, such 
 - required actions
 - payment information
 - unclear or risky parts
-- safe next steps
+- safe non-legal next steps
 
 Reason: Users often do not only need a translation. They need to understand what the letter means in practice and what should be checked or done next.
 
@@ -29,11 +29,20 @@ We use a modular FastAPI backend with separate folders for schemas, routes, and 
 - `routes/` defines API endpoints.
 - `services/` contains the application logic.
 
-Current backend flow:
+Current backend flows:
 
 ```text
 POST /analyze-text
 → analysis route
+→ analysis_service
+→ llm_service
+→ structured response
+```
+
+```text
+POST /analyze-pdf
+→ analysis route
+→ pdf_service
 → analysis_service
 → llm_service
 → structured response
@@ -62,6 +71,8 @@ Reason: These fields match the main questions a user has when reading an officia
 
 This structure also helps the frontend display the result in clear sections or cards instead of showing one long answer.
 
+The same response schema is used for both text input and PDF input.
+
 ## 4. LLM Service Design
 
 LLM-related logic is separated into `llm_service.py`.
@@ -71,7 +82,8 @@ The purpose of this file is to handle:
 - LLM configuration
 - prompt construction
 - provider-specific communication
-- future parsing of LLM responses
+- response schema preparation
+- parsing and validation of LLM responses
 
 Reason: The rest of the backend should not depend directly on one specific LLM provider. If we later switch from one provider to another, most provider-specific changes should stay inside `llm_service.py`.
 
@@ -94,6 +106,8 @@ The prompt is not a general “summarize this text” instruction. It includes r
 
 Reason: The goal is to control the LLM output and reduce generic chatbot behavior. The assistant should extract practical information from the letter, not freely discuss the document.
 
+The prompt is combined with backend schema validation and, once the real provider is connected, structured output configuration.
+
 ## 6. Mock Fallback
 
 Until the real LLM provider and API key are finalized, the backend uses a mock structured response.
@@ -103,6 +117,8 @@ The mock response follows the same structure as the planned real LLM response.
 Reason: This allows backend and frontend development to continue without blocking the project. The frontend can already work with the expected response fields.
 
 Limitation: The mock response is only a development fallback. It is not a real analysis and should not be presented as LLM functionality.
+
+The mock fallback should not be used to hide real LLM errors once the real provider is connected.
 
 ## 7. Secret Management
 
@@ -126,7 +142,8 @@ For the MVP, we follow these privacy decisions:
 
 - no real private letters in GitHub
 - no real personal data in demo screenshots or videos
-- no permanent storage of uploaded letters
+- no permanent storage of uploaded letters or uploaded PDF files
+- PDF files are read in memory and are not permanently stored by the backend
 - no full letter text in backend logs
 - synthetic sample letters for testing and demo
 - API keys stored outside the repository
@@ -144,28 +161,37 @@ The assistant should not:
 - invent consequences that are not clearly stated in the letter
 - tell the user what legal action to take
 
+The structured response includes a `safety_note` field to make this boundary visible in the user-facing result.
+
 Reason: Official letters may have legal or administrative consequences. The system should help users understand the letter, but users should verify important information with the responsible office or a qualified advisor.
 
 ## 10. Testing Strategy
 
-We plan to test the system with synthetic sample letters.
+We use synthetic sample letters for development and plan to add separate demo and evaluation / hold-out samples.
 
-The samples should cover different official-letter scenarios, such as:
+The sample letters are designed to cover different official-letter scenarios, such as:
 
 - missing documents
-- payment request
-- appointment notice
-- no clear deadline
+- payment requests
+- appointment notices
+- information-only notices with no clear deadline
 - unclear or risky wording
-- university or insurance-related notices
+- university, insurance, or administrative notices
 
-We plan to separate sample letters into:
+We separate sample letters into:
 
 - development samples for prompt tuning and debugging
 - a controlled demo sample for the mid-term video
 - evaluation / hold-out samples to check whether the system works beyond the examples used during development
 
-Reason: Testing only with one example would be weak. Using different synthetic samples helps us evaluate whether the system extracts deadlines, actions, payments, and unclear parts consistently while avoiding privacy risks.
+The current development samples cover:
+
+- missing documents with a real submission deadline
+- a semester fee payment request with payment reference
+- an appointment confirmation with a cancellation deadline
+- an information-only notice with no clear deadline or required action
+
+Reason: Testing only with one example would be weak. Using different synthetic samples helps us evaluate whether the system extracts deadlines, actions, payments, and unclear parts consistently while avoiding privacy risks. Separating development, demo, and evaluation samples also helps us avoid tuning the system only for the examples shown in the demo.
 
 ## 11. Current Limitations
 
@@ -174,20 +200,20 @@ The current implementation is still in progress.
 Current limitations:
 
 - real LLM provider integration is not connected yet
-- PDF upload and text extraction are not implemented yet
-- the mock response is not a real analysis
-- scanned PDFs with OCR are outside the MVP scope for now
+- the mock response is not a real LLM analysis
+- text-based PDF upload and extraction are implemented, but OCR for scanned or image-based PDFs is not supported yet
+- demo and evaluation / hold-out samples are not finalized yet
 - follow-up Q&A will be added only after the main analysis flow is stable
 
-Reason: These limitations are intentional for the current stage. The priority is to build a stable core workflow first, then extend it step by step.
+Reason: These limitations are intentional for the current stage. The priority is to build a stable core workflow first, then extend it step by step. For the MVP, we focus on structured analysis of letter text and text-based PDFs, while keeping OCR and follow-up interaction as future work.
 
 ## 12. Mid-term Focus
 
 For the mid-term demo, the main goal is to show a stable core workflow:
 
 ```text
-user provides a letter
-→ backend processes the text
+user provides letter text or a text-based PDF
+→ backend extracts/processes the text
 → LLM-based analysis returns a structured result
 → frontend displays the result clearly
 ```
@@ -198,7 +224,72 @@ The demo should emphasize:
 - the structured analysis output
 - safety and privacy boundaries
 - the difference from a generic chatbot
-- next steps toward PDF upload, testing, and follow-up Q&A
+- text-based PDF support and its current limitation
+- testing with synthetic sample letters
+- next steps toward real LLM integration, evaluation samples, OCR/future PDF improvements, and follow-up Q&A
 
 Reason: The mid-term video should show real progress and a clear technical direction, not only a concept or a generic LLM wrapper.
 
+## 13. Structured Output and Validation Strategy
+
+The backend uses `AnalyzeTextResponse` as the single source of truth for the analysis response structure.
+
+This means the expected output fields are defined in one place and reused across the backend workflow. The same response structure is used for:
+
+- backend validation
+- frontend rendering
+- future LLM structured output configuration
+- documentation of the MVP response format
+
+Reason: We want to avoid having different versions of the response schema in the prompt, backend, and frontend. A single source of truth reduces mismatch risk and keeps the system easier to maintain.
+
+For the LLM integration, our preferred strategy is structured output / JSON schema output.
+
+The planned flow is:
+
+```text
+letter text
+→ LLM provider with structured output schema
+→ structured JSON response
+→ backend validation with AnalyzeTextResponse
+→ frontend-ready response
+```
+
+Even if the LLM provider supports structured output, the backend still validates the response before sending it to the frontend.
+
+Reason: The system should not trust LLM output blindly. Official letters may include deadlines, payments, and administrative consequences, so invalid or incomplete model output should not be passed directly to the user interface.
+
+For the first implementation, we do not add automatic retry behavior.
+
+If the LLM returns invalid JSON or a response that does not match the expected schema, the backend should reject it with a controlled error. A retry mechanism can be added later if testing shows that structured output is unstable.
+
+Reason: Retry adds extra cost, latency, and complexity. We first prioritize structured output and backend validation. Retry is treated as an evidence-based improvement, not as a default behavior.
+
+## 14. PDF Processing Strategy
+
+The MVP supports text-based PDF extraction through the `/analyze-pdf` endpoint.
+
+The backend uses a separate `pdf_service.py` to extract text from uploaded PDF files. PDF extraction is kept separate from the route and LLM logic.
+
+Current PDF flow:
+
+```text
+PDF upload
+→ validate file type
+→ read file in memory
+→ extract text with pdf_service
+→ send extracted text to analysis_service
+→ return the same AnalyzeTextResponse schema
+```
+
+Reason: PDF processing should not be mixed directly into the API route or LLM service. Keeping it separate makes the backend easier to maintain and test.
+
+For the MVP, scanned or image-based PDFs are not processed with OCR.
+
+If readable text cannot be extracted, the backend returns a controlled error instead of sending incomplete or unreliable text to the LLM.
+
+Reason: OCR introduces a separate accuracy problem. In official letters, OCR mistakes can be risky because dates, payment amounts, names, or reference numbers may be misread. For the mid-term MVP, we focus on reliable text-based PDF extraction and keep OCR as future work.
+
+The uploaded PDF is processed in memory and is not permanently stored by the backend.
+
+Reason: Official letters may contain sensitive personal information. Avoiding permanent storage reduces privacy risk and keeps the MVP scope manageable.
