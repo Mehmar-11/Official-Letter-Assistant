@@ -1,106 +1,115 @@
 # Official Letter Assistant
 
-Official Letter Assistant is an LLM-based web application that helps users understand German official letters through clear, structured explanations.
+Official Letter Assistant is a course project that helps users understand German official letters more easily.
 
-The project focuses on practical information such as deadlines, required actions, payment information, unclear or risky parts, and safe next steps. It is designed as a structured document-understanding assistant, not a generic chatbot.
+The goal is not to translate a letter word-for-word. The goal is to identify the practical meaning of the letter: what it is about, whether something is urgent, what the user needs to do, which documents or payments are mentioned, and what should be double-checked.
 
-## Project Structure
+## Problem
 
-```text
-Official-Letter-Assistant/
-├── frontend/   # React frontend
-├── backend/    # FastAPI backend
-├── Docs/       # Project and technical documentation
-└── README.md
-```
+German official letters can be difficult to understand, especially for people who are not confident with formal German administrative language.
 
-## Current Status
+Users may struggle to identify deadlines, required actions, requested documents, payment information, consequences, or unclear parts of the letter.
 
-- React frontend and FastAPI backend are created.
-- Backend has a modular structure with schemas, routes, and services.
-- Test endpoints are available: `GET /` and `GET /health`.
-- Text analysis endpoint is available: `POST /analyze-text`.
-- Text-based PDF analysis endpoint is available: `POST /analyze-pdf`.
-- The MVP response schema for structured letter analysis is defined.
-- Backend includes:
-  - `analysis_service` for the analysis flow
-  - `llm_service` for prompt handling, mock fallback, and structured response preparation
-  - `pdf_service` for text-based PDF extraction
-- Frontend-backend local connection works with the current mock response.
-- Synthetic development sample letters are available for testing.
-- Real LLM provider integration is not connected yet.
+## Solution
 
-## Backend API
+The application analyzes a German official letter and returns a structured English explanation.
 
-### `POST /analyze-text`
+Instead of giving a long chatbot-style answer, the system separates the result into clear sections such as:
 
-Receives German official letter text and returns a structured analysis response.
+- Bottom line
+- Urgency
+- Sender
+- Topic
+- Useful details
+- Dates and deadlines
+- What the user needs to do
+- Documents needed
+- Payment details
+- Possible consequences
+- Things to double-check
+- Safety note
 
-Request body:
+This makes the result easier to display in the frontend and easier for the user to understand.
 
-```json
-{
-  "letter_text": "Sehr geehrte Frau Müller..."
-}
-```
+## MVP Scope
 
-### `POST /analyze-pdf`
+The current MVP supports:
 
-Receives a text-based PDF file, extracts readable text, and returns the same structured analysis response.
+- pasted letter text
+- text-based PDF upload
+- text extraction from PDFs
+- LLM-based structured analysis
+- validated JSON response from the backend
+- mock response fallback when the API key is not configured
+- synthetic sample letters for development and testing
 
-Current PDF support is limited to text-based PDFs. Scanned or image-based PDFs are not processed with OCR in the current MVP.
+Not included in the current MVP:
 
-## MVP Response Fields
+- OCR for scanned PDFs
+- follow-up Q&A about the letter
+- permanent storage of uploaded letters or PDFs
 
-Both `/analyze-text` and `/analyze-pdf` return the same response structure:
+## Architecture Overview
 
-- `sender`
-- `letter_topic`
-- `summary`
-- `important_information`
-- `deadlines`
-- `required_actions`
-- `payment_information`
-- `unclear_or_risky_parts`
-- `next_steps`
-- `safety_note`
+The project is split into frontend and backend parts.
 
-## Privacy and Safety
+The backend handles:
 
-- No real private letters should be committed to GitHub.
-- Synthetic sample letters are used for development and testing.
-- Uploaded letter text and PDF files are not permanently stored by the backend.
-- API keys are stored locally in `.env` and are not committed to the repository.
-- The assistant explains letter content but does not provide legal advice.
+- API endpoints
+- PDF text extraction
+- prompt construction
+- LLM provider communication
+- structured output validation
+- mock fallback behavior
+
+The frontend handles:
+
+- user input
+- file upload
+- displaying the structured analysis result
+- user-friendly labels and layout
+
+Basic flow:
+
+    user submits text or a text-based PDF
+    → backend extracts/processes the text
+    → LLM returns structured analysis
+    → backend validates the response
+    → frontend displays the result
+
+## Tech Stack
+
+Backend:
+
+- FastAPI
+- Python
+- OpenAI API
+- Pydantic
+- python-dotenv
+- pdfplumber
+
+Frontend:
+
+- React
+- TypeScript
+
+## Run the Project
+
+To run the full project, set up the backend first, then the frontend. See the README files below for details.
+
+Backend setup and API usage are documented in:
+
+    backend/README.md
+
+Frontend setup is documented in:
+
+    frontend/README.md
 
 ## Documentation
 
-Additional documentation is available in:
+Important project documentation:
 
-```text
-Docs/technical-decisions.md
-backend/sample_letters/README.md
-backend/sample_letters/dev/README.md
-```
-
-These files document technical decisions, testing strategy, privacy rules, and the purpose of synthetic sample letters.
-
-## Planned Tech Stack
-
-- Frontend: React
-- Backend: FastAPI
-- PDF processing: pdfplumber
-- LLM: API-based model with structured output
-- Deployment: simple cloud hosting, such as Vercel for frontend and Render for backend
-
-## Current Limitations
-
-- Real LLM provider integration is not connected yet.
-- The current analysis response is still a mock response.
-- OCR for scanned or image-based PDFs is not supported in the MVP.
-- Demo and hold-out evaluation samples are not finalized yet.
-- Follow-up Q&A is planned only after the main analysis flow is stable.
-
-## Course
-
-SWP: Chat, Search and Summaries
+- `backend/README.md` — backend setup, API usage, response structure, and validation
+- `frontend/README.md` — frontend setup and UI details
+- `backend/sample_letters/README.md` — synthetic sample letter strategy and testing checklist
+- `Docs/technical-decisions.md` — main technical decisions and design reasoning
