@@ -1,5 +1,6 @@
-from pydantic import BaseModel
 from typing import List
+
+from pydantic import BaseModel
 
 
 class AnalyzeTextRequest(BaseModel):
@@ -8,12 +9,16 @@ class AnalyzeTextRequest(BaseModel):
 
 class AnalyzeTextResponse(BaseModel):
     sender: str
+    sender_type: str
+    urgency_level: str
+    urgency_reason: str
     letter_topic: str
-    summary: str
-    important_information: List[str]
+    tldr: str
+    useful_details: List[str]
     deadlines: List[str]
     required_actions: List[str]
+    required_documents: List[str]
     payment_information: List[str]
+    possible_consequences: List[str]
     unclear_or_risky_parts: List[str]
-    next_steps: List[str]
     safety_note: str
