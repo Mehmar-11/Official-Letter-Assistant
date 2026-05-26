@@ -29,13 +29,20 @@ export default function App() {
     try {
       const response = await fetch("http://localhost:8000/analyze-text", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ letter_text: text }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          letter_text: text,
+        }),
       });
 
       const data = await response.json();
+
       setResult(data);
-      typeText(data.summary || "", setAnimatedSummary);
+
+      typeText(data.bottom_line || "", setAnimatedSummary);
+
     } catch (err) {
       console.error("Backend error:", err);
       alert("Backend connection failed");
@@ -59,6 +66,7 @@ export default function App() {
         <div style={styles.leftPanel}>
           <div style={styles.panelTitle}>Input Document</div>
 
+          {/* MODE SWITCH */}
           <div style={styles.switchRow}>
             <button
               onClick={() => setMode("text")}
@@ -75,6 +83,7 @@ export default function App() {
             </button>
           </div>
 
+          {/* TEXT MODE */}
           {mode === "text" ? (
             <textarea
               value={text}
@@ -83,6 +92,7 @@ export default function App() {
               style={styles.textarea}
             />
           ) : (
+            /* PDF MODE */
             <div
               style={styles.dropZone}
               onDragOver={(e) => e.preventDefault()}
@@ -108,6 +118,7 @@ export default function App() {
             </div>
           )}
 
+          {/* BUTTON */}
           <button
             onClick={analyzeLetter}
             style={styles.analyzeBtn}
@@ -119,6 +130,7 @@ export default function App() {
 
         {/* RIGHT PANEL */}
         <div style={styles.rightPanel}>
+
           <div style={styles.panelTitle}>Analysis Output</div>
 
           {loading && (
@@ -127,7 +139,7 @@ export default function App() {
             </div>
           )}
 
-          {/* TIMELINE (REALISTIC) */}
+          {/* TIMELINE */}
           <div style={styles.timeline}>
             <div>Document received</div>
             <div>Preparing document text</div>
@@ -135,59 +147,68 @@ export default function App() {
             <div>Generating response</div>
           </div>
 
-          {/* OVERVIEW */}
+          {/* RESULT CARDS */}
+
+          <div style={styles.card}>
+            <div style={styles.label}>Bottom Line</div>
+            <div>{animatedSummary || result?.bottom_line || "—"}</div>
+          </div>
+
+          <div style={styles.card}>
+            <div style={styles.label}>Urgency</div>
+            <div>{result?.urgency || "—"}</div>
+          </div>
+
           <div style={styles.card}>
             <div style={styles.label}>Sender</div>
             <div>{result?.sender || "—"}</div>
           </div>
 
           <div style={styles.card}>
-            <div style={styles.label}>Letter Topic</div>
-            <div>{result?.letter_topic || "—"}</div>
+            <div style={styles.label}>Topic</div>
+            <div>{result?.topic || "—"}</div>
           </div>
 
           <div style={styles.card}>
-            <div style={styles.label}>Summary</div>
-            <div>{animatedSummary || "Waiting..."}</div>
-          </div>
-
-          {/* INFORMATION */}
-          <div style={styles.card}>
-            <div style={styles.label}>Important Information</div>
-            <div>{result?.important_information?.join(", ") || "—"}</div>
+            <div style={styles.label}>Useful Details</div>
+            <div>{result?.useful_details?.join(", ") || "—"}</div>
           </div>
 
           <div style={styles.card}>
-            <div style={styles.label}>Deadlines</div>
-            <div>{result?.deadlines?.join(", ") || "—"}</div>
+            <div style={styles.label}>Dates and Deadlines</div>
+            <div>{result?.dates_and_deadlines?.join(", ") || "—"}</div>
           </div>
 
           <div style={styles.card}>
-            <div style={styles.label}>Payment Information</div>
-            <div>{result?.payment_information?.join(", ") || "—"}</div>
-          </div>
-
-          {/* ACTIONS */}
-          <div style={styles.card}>
-            <div style={styles.label}>Required Actions</div>
-            <div>{result?.required_actions?.join(", ") || "—"}</div>
+            <div style={styles.label}>Documents Needed</div>
+            <div>{result?.documents_needed?.join(", ") || "—"}</div>
           </div>
 
           <div style={styles.card}>
-            <div style={styles.label}>Next Steps</div>
-            <div>{result?.next_steps?.join(", ") || "—"}</div>
+            <div style={styles.label}>Payment Details</div>
+            <div>{result?.payment_details?.join(", ") || "—"}</div>
           </div>
 
-          {/* WARNINGS */}
           <div style={styles.card}>
-            <div style={styles.label}>Unclear or Risky Parts</div>
-            <div>{result?.unclear_or_risky_parts?.join(", ") || "—"}</div>
+            <div style={styles.label}>What You Need To Do</div>
+            <div>{result?.what_user_needs_to_do?.join(", ") || "—"}</div>
+          </div>
+
+          <div style={styles.card}>
+            <div style={styles.label}>Possible Consequences</div>
+            <div>{result?.possible_consequences?.join(", ") || "—"}</div>
+          </div>
+
+          <div style={styles.card}>
+            <div style={styles.label}>Things To Double Check</div>
+            <div>{result?.things_to_double_check?.join(", ") || "—"}</div>
           </div>
 
           <div style={styles.card}>
             <div style={styles.label}>Safety Note</div>
             <div>{result?.safety_note || "—"}</div>
           </div>
+
         </div>
       </div>
     </div>
@@ -195,12 +216,14 @@ export default function App() {
 }
 
 /* ================= STYLES ================= */
+
 const styles = {
   page: {
-    height: "100vh",
+    minHeight: "100vh",
     background: "radial-gradient(circle at 20% 20%, #1e1b4b, #0b0f19 60%)",
     color: "white",
     fontFamily: "Arial",
+    paddingBottom: "40px",
   },
 
   topBar: {
@@ -210,9 +233,15 @@ const styles = {
     borderBottom: "1px solid rgba(255,255,255,0.08)",
   },
 
-  brand: { fontWeight: "600" },
+  brand: {
+    fontWeight: "600",
+    fontSize: "18px",
+  },
 
-  status: { color: "#22c55e", fontSize: "12px" },
+  status: {
+    color: "#22c55e",
+    fontSize: "12px",
+  },
 
   grid: {
     display: "grid",
@@ -239,22 +268,29 @@ const styles = {
     marginBottom: "10px",
   },
 
-  switchRow: { display: "flex", gap: "10px" },
+  switchRow: {
+    display: "flex",
+    gap: "10px",
+  },
 
   tab: {
     flex: 1,
-    padding: "8px",
+    padding: "10px",
     background: "#1f2937",
     color: "white",
     border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
   },
 
   activeTab: {
     flex: 1,
-    padding: "8px",
+    padding: "10px",
     background: "#4f46e5",
     color: "white",
     border: "none",
+    borderRadius: "8px",
+    cursor: "pointer",
   },
 
   textarea: {
@@ -263,15 +299,18 @@ const styles = {
     marginTop: "10px",
     background: "#0b1220",
     color: "white",
-    padding: "10px",
+    padding: "12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.08)",
   },
 
   dropZone: {
     marginTop: "10px",
-    padding: "20px",
+    padding: "30px",
     border: "2px dashed #6366f1",
     textAlign: "center",
     position: "relative",
+    borderRadius: "12px",
   },
 
   hiddenFile: {
@@ -281,38 +320,50 @@ const styles = {
     height: "100%",
     top: 0,
     left: 0,
+    cursor: "pointer",
   },
 
   analyzeBtn: {
-    marginTop: "10px",
+    marginTop: "16px",
     width: "100%",
-    padding: "10px",
+    padding: "12px",
     background: "#6366f1",
     color: "white",
     border: "none",
+    borderRadius: "10px",
+    cursor: "pointer",
+    fontWeight: "600",
   },
 
   scanning: {
     padding: "10px",
     background: "rgba(99,102,241,0.2)",
     marginBottom: "10px",
+    borderRadius: "8px",
   },
 
   timeline: {
     fontSize: "12px",
     color: "#9ca3af",
-    marginBottom: "10px",
+    marginBottom: "16px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
   },
 
   card: {
     background: "rgba(255,255,255,0.05)",
-    padding: "10px",
-    marginBottom: "10px",
+    padding: "14px",
+    marginBottom: "12px",
+    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.05)",
   },
 
   label: {
     fontSize: "12px",
     color: "#9ca3af",
-    marginBottom: "5px",
+    marginBottom: "6px",
+    textTransform: "uppercase",
+    letterSpacing: "0.5px",
   },
 };
