@@ -14,7 +14,9 @@ Users may struggle to identify deadlines, required actions, requested documents,
 
 The application analyzes a German official letter and returns a structured English explanation.
 
-Instead of giving a long chatbot-style answer, the system separates the result into clear sections such as:
+Instead of generating loose, chatbot-style text, the backend enforces a strict JSON schema using **OpenAI Structured Outputs** paired with **Pydantic** validation. This strongly constrains the LLM response to match the backend schema and keeps it aligned with the frontend data contract.
+
+The system separates the result into clear, scannable sections:
 
 - Bottom line
 - Urgency
@@ -29,7 +31,7 @@ Instead of giving a long chatbot-style answer, the system separates the result i
 - Things to double-check
 - Safety note
 
-This makes the result easier to display in the frontend and easier for the user to understand.
+
 
 ## MVP Scope
 
@@ -51,31 +53,18 @@ Not included in the current MVP:
 
 ## Architecture Overview
 
-The project is split into frontend and backend parts.
+The project is split into a FastAPI backend and a React/TypeScript frontend.
 
-The backend handles:
+### Backend Pipeline:
+1. **Text Ingestion:** Extracts raw text from user input or text-based PDFs via `pdfplumber`.
+2. **Strict LLM Querying:** Constructs the prompt and calls the OpenAI API utilizing native `response_format` (JSON Schema derived directly from Pydantic models).
+3. **Type-Safe Validation:** Validates the structured JSON through Pydantic before sending it to the frontend. If validation fails, the backend rejects the response and returns a controlled error instead of showing incomplete output to the user.
+4. **API Response:** Dispatches the validated, structured JSON payload to the frontend.
 
-- API endpoints
-- PDF text extraction
-- prompt construction
-- LLM provider communication
-- structured output validation
-- mock fallback behavior
+### Frontend Pipeline:
+1. Captures user input and file uploads.
+2. Renders the structured JSON analysis into typed, user-friendly UI components and status cards.
 
-The frontend handles:
-
-- user input
-- file upload
-- displaying the structured analysis result
-- user-friendly labels and layout
-
-Basic flow:
-
-    user submits text or a text-based PDF
-    → backend extracts/processes the text
-    → LLM returns structured analysis
-    → backend validates the response
-    → frontend displays the result
 
 ## Tech Stack
 

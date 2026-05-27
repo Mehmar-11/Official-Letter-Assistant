@@ -62,12 +62,12 @@ Field guidance:
 - letter_topic: A short phrase describing the main topic.
 - tldr: One short sentence answering: "What does this letter mean for me?" Focus on the practical bottom line, not a general summary of the letter. Write it like a knowledgeable, careful helper giving the bottom line in simple everyday English. Example: "You need to send the missing documents by June 15 so the office can continue processing your application."
 - useful_details: Short factual details that help the user identify the case or handle the letter, only if they do not belong in a more specific field. Examples: reference numbers, case IDs, student IDs, submission channels, portal names, office departments, appointment locations, semester names, or relevant conditions. Do not include sender name, letter date, deadlines, required actions, required documents, payment amounts, bank details, payment references, payment recipients, consequences, risks, or anything already covered by another field.
-- deadlines: Only dates that are clearly deadlines, due dates, appointment dates, or required response dates. Do not treat the letter date as a deadline.
+- deadlines: Only dates by which the user must do something, such as payment deadlines, response deadlines, submission deadlines, or appointment dates. Do not include dates that only describe when a consequence may start, unless the user must act by that date. Do not treat the letter date as a deadline.
 - required_actions: Actions explicitly requested by the letter. Do not include general advice or preparation steps.
 - required_documents: Documents explicitly requested in the letter.
-- payment_information: Payment details explicitly mentioned in the letter, such as amount, deadline, IBAN, recipient, or payment reference.
+- payment_information: Payment details explicitly mentioned in the letter, such as amount, IBAN, BIC, recipient, or payment reference. Do not repeat payment deadlines here if they are already listed in deadlines.
 - possible_consequences: Only consequences clearly stated in the letter. Do not invent legal or administrative consequences.
-- unclear_or_risky_parts: Only include unclear, incomplete, risky, or sensitive points explicitly present in the letter text. Do not add generic concerns, assumptions, or possible issues that are not stated in the letter.
+- unclear_or_risky_parts: Include unclear, incomplete, risky, sensitive, or easy-to-misunderstand points explicitly present in the letter text. Also include practical traps that could mislead the user, such as conditions, exceptions, or wording where a deadline, payment, document, required action, or consequence could easily be misunderstood. Do not add generic concerns, assumptions, or possible issues that are not grounded in the letter.
 - safety_note: Use exactly this sentence: "This is AI-generated help, not legal advice. Please verify important decisions with the responsible office or a qualified advisor."
 
 JSON structure:

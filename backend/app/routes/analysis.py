@@ -8,9 +8,23 @@ from app.services.pdf_service import extract_text_from_pdf_bytes
 router = APIRouter()
 
 
+def analyze_letter_or_raise_http_error(letter_text: str) -> AnalyzeTextResponse:
+    """
+    Analyze letter text and convert backend validation failures into a
+    controlled HTTP error instead of returning invalid output to the frontend.
+    """
+    try:
+        return analyze_letter_text(letter_text)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="LLM response failed backend validation.",
+        ) from error
+
+
 @router.post("/analyze-text", response_model=AnalyzeTextResponse)
 def analyze_text(request: AnalyzeTextRequest):
-    return analyze_letter_text(request.letter_text)
+    return analyze_letter_or_raise_http_error(request.letter_text)
 
 
 @router.post("/analyze-pdf", response_model=AnalyzeTextResponse)
@@ -31,4 +45,4 @@ async def analyze_pdf(file: UploadFile = File(...)):
             detail=str(error),
         ) from error
 
-    return analyze_letter_text(extracted_text)
+    return analyze_letter_or_raise_http_error(extracted_text)
