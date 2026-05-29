@@ -42,13 +42,14 @@ The current MVP supports:
 - text extraction from PDFs
 - LLM-based structured analysis
 - validated JSON response from the backend
+- guided follow-up questions for payment, documents, consequences, and important risks
 - mock response fallback when the API key is not configured
 - synthetic sample letters for development and testing
 
 Not included in the current MVP:
 
 - OCR for scanned PDFs
-- follow-up Q&A about the letter
+- open-ended multi-turn chat about the letter
 - permanent storage of uploaded letters or PDFs
 
 ## Architecture Overview
@@ -60,10 +61,12 @@ The project is split into a FastAPI backend and a React/TypeScript frontend.
 2. **Strict LLM Querying:** Constructs the prompt and calls the OpenAI API utilizing native `response_format` (JSON Schema derived directly from Pydantic models).
 3. **Type-Safe Validation:** Validates the structured JSON through Pydantic before sending it to the frontend. If validation fails, the backend rejects the response and returns a controlled error instead of showing incomplete output to the user.
 4. **API Response:** Dispatches the validated, structured JSON payload to the frontend.
+5. **Guided Follow-up:** Answers fixed follow-up question types using selected fields from the structured analysis instead of re-analyzing the full letter.
 
 ### Frontend Pipeline:
 1. Captures user input and file uploads.
 2. Renders the structured JSON analysis into typed, user-friendly UI components and status cards.
+3. Shows guided follow-up options for common user concerns such as payment, documents, consequences, and important risks.
 
 
 ## Tech Stack

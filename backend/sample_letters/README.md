@@ -14,7 +14,7 @@ Development samples used for prompt tuning, debugging, and checking backend beha
 
 ### `demo/`
 
-Controlled samples used for the mid-term demo video.
+Controlled samples used for demo videos and presentation walkthroughs.
 
 ### `eval/`
 
@@ -87,6 +87,7 @@ For each sample response, check whether the system:
 - assigns urgency based on the letter content and the injected current date
 - avoids legal advice
 - includes the fixed safety note
+- checks guided follow-up answers for the supported question types: `payment`, `documents`, `consequences`, and `careful`
 
 ## Cost-Control Rules
 
@@ -98,10 +99,8 @@ For each sample response, check whether the system:
 
 ## Demo Note
 
-For the demo, prefer samples that clearly show practical value, such as:
+## Demo Note
 
-- a letter with missing documents and a deadline
-- a payment request
-- an appointment notice
+The current main demo sample is a synthetic insurance reminder letter with payment, proof-of-payment, deadlines, consequences, and risk points.
 
-The demo sample should be synthetic, realistic, and easy for the audience to understand.
+Use demo samples that are synthetic, realistic, and easy for the audience to understand.

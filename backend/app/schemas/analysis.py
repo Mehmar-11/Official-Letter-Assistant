@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Literal
 
 from pydantic import BaseModel
 
@@ -22,3 +22,13 @@ class AnalyzeTextResponse(BaseModel):
     possible_consequences: List[str]
     unclear_or_risky_parts: List[str]
     safety_note: str
+
+
+class FollowUpRequest(BaseModel):
+    analysis: AnalyzeTextResponse
+    question_type: Literal["payment", "documents", "consequences", "careful"]
+
+
+class FollowUpResponse(BaseModel):
+    summary: str
+    details: List[str]

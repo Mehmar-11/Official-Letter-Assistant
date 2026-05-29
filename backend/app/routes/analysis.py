@@ -1,8 +1,14 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
-from app.schemas.analysis import AnalyzeTextRequest, AnalyzeTextResponse
+from app.schemas.analysis import (
+    AnalyzeTextRequest,
+    AnalyzeTextResponse,
+    FollowUpRequest,
+    FollowUpResponse,
+)
 from app.services.analysis_service import analyze_letter_text
 from app.services.pdf_service import extract_text_from_pdf_bytes
+from app.services.followup_service import answer_followup_question
 
 
 router = APIRouter()
@@ -46,3 +52,17 @@ async def analyze_pdf(file: UploadFile = File(...)):
         ) from error
 
     return analyze_letter_or_raise_http_error(extracted_text)
+
+
+@router.post("/follow-up", response_model=FollowUpResponse)
+def follow_up(request: FollowUpRequest):
+    try:
+        return answer_followup_question(
+            analysis=request.analysis,
+            question_type=request.question_type,
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="LLM follow-up response failed backend validation.",
+        ) from error

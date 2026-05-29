@@ -95,6 +95,44 @@ Notes:
 - Scanned PDFs are not supported yet.
 - If text cannot be extracted from a PDF, the backend returns a clear 400 error message. In the MVP, users should paste the letter text manually instead.
 
+### Guided follow-up
+
+Endpoint:
+
+    POST /follow-up
+
+This endpoint answers one fixed follow-up question based on an already generated structured analysis.
+
+The follow-up feature is intentionally guided, not open chat. The frontend sends one of four supported `question_type` values:
+
+- `payment`
+- `documents`
+- `consequences`
+- `careful`
+
+Example request shape:
+
+    {
+      "analysis": {
+        "...": "same shape as AnalyzeTextResponse"
+      },
+      "question_type": "payment"
+    }
+
+Example response shape:
+
+    {
+      "summary": "string",
+      "details": ["string"]
+    }
+
+Design notes:
+
+- The backend does not re-analyze the original letter for follow-up answers.
+- Follow-up answers are generated from selected fields of the structured analysis.
+- This keeps the MVP more controlled, cheaper to run, and easier to test than an open-ended chat.
+- The current MVP supports only the four guided question types above.
+
 ## Main Features
 
 - Analyze pasted official-letter text
@@ -103,6 +141,8 @@ Notes:
 - Return structured JSON
 - Validate LLM output with Pydantic
 - Use mock mode when the API key is not configured
+- Answer guided follow-up questions using structured analysis results
+- Keep follow-up scope limited to fixed question types for reliability
 
 OCR is not part of the MVP because OCR mistakes can be risky for dates, payment amounts, reference numbers, and deadlines.
 
@@ -172,6 +212,7 @@ Relevant files:
 - `app/services/llm_service.py`
 
 If the API key is not configured, the backend returns a mock response. This allows backend and frontend development to continue without making API calls.
+Follow-up responses are also validated against `FollowUpResponse`, which returns a short `summary` and a list of `details`.
 
 ## Testing Notes
 
