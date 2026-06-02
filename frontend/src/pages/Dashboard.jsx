@@ -5,11 +5,10 @@ export default function Dashboard({ onBack }) {
   const [file, setFile] = useState(null);
   const [mode, setMode] = useState("text");
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [result, setResult] = useState(null);
   const [animatedSummary, setAnimatedSummary] = useState("");
   const [activeDetail, setActiveDetail] = useState("payment");
-  const [showAbout, setShowAbout] = useState(false); // <-- ADDED
+  const [showAbout, setShowAbout] = useState(false);
   const typewriterRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -29,16 +28,6 @@ export default function Dashboard({ onBack }) {
     }, 25);
     typewriterRef.current = interval;
   };
-
-  useEffect(() => {
-    let interval;
-    if (loading) {
-      interval = setInterval(() => {
-        setProgress(prev => Math.min(prev + 5, 95));
-      }, 350);
-    }
-    return () => clearInterval(interval);
-  }, [loading]);
 
   const handleFileSelect = (e) => {
     const f = e.target.files[0];
@@ -61,20 +50,20 @@ export default function Dashboard({ onBack }) {
     if (mode === "pdf" && !file) return alert("Please upload a PDF file");
 
     setLoading(true);
-    setProgress(10);
     setResult(null);
     setAnimatedSummary("");
 
     try {
       let response;
       if (mode === "text") {
-        const formData = new FormData();
-        formData.append("letter_text", text);
+        // ✅ Send JSON for text analysis
         response = await fetch("http://localhost:8000/analyze-text", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ letter_text: text }),
         });
       } else {
+        // ✅ Send FormData for PDF
         const formData = new FormData();
         formData.append("file", file);
         response = await fetch("http://localhost:8000/analyze-pdf", {
@@ -85,7 +74,6 @@ export default function Dashboard({ onBack }) {
 
       if (!response.ok) throw new Error("Backend error");
       const data = await response.json();
-      setProgress(100);
       setResult(data);
       startTypewriter(data.tldr || data.summary || "No summary available");
     } catch (err) {
@@ -102,16 +90,8 @@ export default function Dashboard({ onBack }) {
     setAnimatedSummary("");
     setText("");
     setFile(null);
-    setProgress(0);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
-
-  const progressSteps = [
-    { label: "Document received", threshold: 20 },
-    { label: "Preparing document text", threshold: 45 },
-    { label: "Structured analysis running", threshold: 70 },
-    { label: "Generating response", threshold: 100 },
-  ];
 
   const detailSections = {
     payment: { title: "Payment details", content: result?.payment_information || [] },
@@ -129,11 +109,12 @@ export default function Dashboard({ onBack }) {
         </div>
         <div style={styles.topRight}>
           <button style={styles.backBtn} onClick={onBack}>← Back to Home</button>
-          <button style={styles.aboutBtn} onClick={() => setShowAbout(true)}>About</button> {/* UPDATED */}
+          <button style={styles.aboutBtn} onClick={() => setShowAbout(true)}>About</button>
         </div>
       </div>
 
       <div style={styles.mainContainer}>
+        {/* Left Panel */}
         <div style={styles.leftPanel}>
           <div style={styles.sectionNumber}>1. Add your letter</div>
           <div style={styles.switchRow}>
@@ -167,21 +148,9 @@ export default function Dashboard({ onBack }) {
           </button>
 
           {loading && (
-            <div style={styles.progressCard}>
-              <div style={styles.progressTitle}>Analysis progress</div>
-              {progressSteps.map((step, idx) => (
-                <div key={idx} style={styles.progressItem}>
-                  <div style={{
-                    ...styles.progressCircle,
-                    background: progress >= step.threshold ? "#2563eb" : "white",
-                    border: progress >= step.threshold ? "2px solid #2563eb" : "2px solid #cbd5e1",
-                    color: progress >= step.threshold ? "white" : "#94a3b8"
-                  }}>
-                    {progress >= step.threshold && "✓"}
-                  </div>
-                  <div style={styles.progressLabel}>{step.label}</div>
-                </div>
-              ))}
+            <div style={styles.loadingCard}>
+              <div style={styles.spinner}></div>
+              <div style={styles.loadingText}>Analyzing your letter...</div>
             </div>
           )}
 
@@ -192,6 +161,7 @@ export default function Dashboard({ onBack }) {
           </div>
         </div>
 
+        {/* Right Panel */}
         <div style={styles.rightPanel}>
           <div style={styles.sectionNumber}>2. Analysis Result</div>
 
@@ -221,12 +191,12 @@ export default function Dashboard({ onBack }) {
                 </div>
               </div>
 
+              {/* What you need to do – without checkboxes */}
               <div style={styles.card}>
                 <div style={styles.cardTitle}>✅ What you need to do</div>
                 {(result.required_actions || []).map((action, i) => (
-                  <div key={i} style={styles.actionItem}>
-                    <div style={styles.checkbox}></div>
-                    <div>{i+1}. {action}</div>
+                  <div key={i} style={styles.actionItemPlain}>
+                    {i+1}. {action}
                   </div>
                 ))}
               </div>
@@ -248,17 +218,7 @@ export default function Dashboard({ onBack }) {
                 </div>
               </div>
 
-              <div style={styles.extraNoteCard}>
-                <div style={styles.extraNoteTitle}>📋 The letter includes a payment request and an extra proof-of-payment condition.</div>
-                <div style={styles.extraNoteContent}>
-                  • Amount: {result.payment_information?.[0] || "—"}<br />
-                  • Recipient: {result.sender || "—"}<br />
-                  • IBAN: {result.payment_information?.[2] || "—"}<br />
-                  • Payment deadline: {result.deadlines?.[0] || "—"}<br />
-                  • Proof of payment: If paid after the deadline, upload proof as required.
-                </div>
-              </div>
-
+              {/* Additional details (duplicate section removed) */}
               <div style={styles.additionalDetailsCard}>
                 <div style={styles.additionalDetailsTitle}>📌 Additional details</div>
                 <div style={styles.additionalDetailsContent}>
@@ -275,7 +235,7 @@ export default function Dashboard({ onBack }) {
         </div>
       </div>
 
-      {/* About Modal - ADDED */}
+      {/* About Modal */}
       {showAbout && (
         <div style={styles.modalOverlay} onClick={() => setShowAbout(false)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
@@ -313,35 +273,30 @@ const styles = {
   dropZone: { border: "2px dashed #c7d2fe", borderRadius: 12, padding: 20, textAlign: "center", background: "#f8fbff", cursor: "pointer", minHeight: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 },
   dropIcon: { fontSize: 32 }, dropText: { fontSize: 12, color: "#4b5563", fontWeight: 500 }, dropSubtext: { fontSize: 10, color: "#9ca3af" }, hiddenInput: { display: "none" }, fileName: { marginTop: 6, color: "#2563eb", fontSize: 11, fontWeight: 500 },
   analyzeBtn: { width: "100%", marginTop: 10, padding: 10, borderRadius: 40, border: "none", background: "linear-gradient(135deg, #2563eb, #1d4ed8)", color: "white", fontWeight: 600, fontSize: 13, cursor: "pointer" },
-  progressCard: { marginTop: 10, border: "1px solid #e5e7eb", borderRadius: 12, padding: 10 }, progressTitle: { fontWeight: 600, marginBottom: 8, fontSize: 11 },
-  progressItem: { display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }, progressCircle: { width: 16, height: 16, borderRadius: 999, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: "bold" }, progressLabel: { fontSize: 10 },
+  loadingCard: { marginTop: 10, padding: 12, background: "#f8fafc", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, border: "1px solid #e2e8f0" },
+  spinner: { width: 20, height: 20, border: "3px solid #e2e8f0", borderTop: "3px solid #2563eb", borderRadius: "50%", animation: "spin 1s linear infinite" },
+  loadingText: { fontSize: 12, color: "#475569", fontWeight: 500 },
   infoCard: { marginTop: 10, border: "1px solid #fef3c7", borderRadius: 12, padding: 10, background: "#fffbeb" }, infoTitle: { fontWeight: 600, marginBottom: 4, fontSize: 11 }, infoText: { fontSize: 9, color: "#6b7280", marginTop: 2 },
   emptyState: { height: 250, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#94a3b8", textAlign: "center" },
   resultContent: { display: "flex", flexDirection: "column", gap: 10 },
   heroCard: { background: "#fefce8", border: "1px solid #fef08a", borderRadius: 14, padding: 12, marginBottom: 2 }, heroTitle: { fontSize: 10, fontWeight: 700, color: "#ca8a04", textTransform: "uppercase" }, heroText: { marginTop: 6, fontSize: 15, fontWeight: 700, lineHeight: 1.3, color: "#1e293b" },
   metaSection: { display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }, metaLabel: { fontSize: 9, color: "#6b7280", marginBottom: 2 }, metaValue: { fontWeight: 600, fontSize: 11 }, orangeBadge: { display: "inline-flex", background: "#ffedd5", color: "#ea580c", padding: "2px 8px", borderRadius: 40, fontWeight: 600, fontSize: 9 },
   card: { background: "white", border: "1px solid #e2e8f0", borderRadius: 12, padding: 12, marginBottom: 2 }, cardTitle: { fontWeight: 700, marginBottom: 8, fontSize: 12 },
-  actionItem: { display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #f1f5f9", fontSize: 11 }, checkbox: { width: 12, height: 12, borderRadius: 3, border: "2px solid #cbd5e1", flexShrink: 0 },
+  actionItemPlain: { padding: "6px 0", borderBottom: "1px solid #f1f5f9", fontSize: 11, color: "#1e293b" },
   specificDetailsSection: { background: "#f8fafc", borderRadius: 12, padding: 12, marginBottom: 2 }, specificDetailsTitle: { fontWeight: 700, fontSize: 13, marginBottom: 2 }, specificDetailsSub: { fontSize: 10, color: "#64748b", marginBottom: 10 },
   detailButtons: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }, detailBtn: { padding: "4px 10px", borderRadius: 40, border: "1px solid #e2e8f0", background: "white", cursor: "pointer", fontSize: 10, fontWeight: 500 }, detailBtnActive: { padding: "4px 10px", borderRadius: 40, border: "1px solid #2563eb", background: "#eff6ff", color: "#2563eb", cursor: "pointer", fontSize: 10, fontWeight: 600 },
   detailContent: { background: "white", borderRadius: 10, padding: 10, border: "1px solid #e2e8f0" }, detailContentTitle: { fontWeight: 700, marginBottom: 8, fontSize: 11 }, detailContentItem: { padding: "4px 0", fontSize: 10, color: "#475569", borderBottom: "1px solid #f1f5f9" },
-  extraNoteCard: { background: "#fef3c7", borderRadius: 12, padding: 12, marginBottom: 2 }, extraNoteTitle: { fontWeight: 700, fontSize: 11, marginBottom: 8, color: "#92400e" }, extraNoteContent: { fontSize: 10, color: "#78350f", lineHeight: 1.5 },
   additionalDetailsCard: { background: "#f3e8ff", borderRadius: 12, padding: 12, marginBottom: 2 }, additionalDetailsTitle: { fontWeight: 700, fontSize: 11, marginBottom: 8, color: "#6b21a5" }, additionalDetailsContent: { fontSize: 10, color: "#4c1d95", lineHeight: 1.5 },
   safetyCard: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: 10, fontSize: 10, color: "#166534" },
   newAnalysisBtn: { width: "100%", marginTop: 12, padding: 8, borderRadius: 40, border: "1px solid #2563eb", background: "white", color: "#2563eb", fontWeight: 600, fontSize: 12, cursor: "pointer" },
   heroSkeleton: { height: 120, borderRadius: 14, background: "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)", backgroundSize: "200% 100%", marginBottom: 10 },
   skeletonCard: { height: 140, borderRadius: 12, background: "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)", backgroundSize: "200% 100%" },
-  // Modal styles - ADDED
-  modalOverlay: {
-    position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-    background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-  },
-  modalContent: {
-    background: "white", padding: 24, borderRadius: 24, maxWidth: 450, width: "90%",
-    boxShadow: "0 20px 35px -10px black",
-  },
-  modalClose: {
-    marginTop: 16, padding: "8px 16px", background: "#2563eb", color: "white",
-    border: "none", borderRadius: 40, cursor: "pointer",
-  },
+  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
+  modalContent: { background: "white", padding: 24, borderRadius: 24, maxWidth: 450, width: "90%", boxShadow: "0 20px 35px -10px black" },
+  modalClose: { marginTop: 16, padding: "8px 16px", background: "#2563eb", color: "white", border: "none", borderRadius: 40, cursor: "pointer" },
 };
+
+// Add keyframe animation for spinner
+const styleSheet = document.createElement("style");
+styleSheet.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+document.head.appendChild(styleSheet);
