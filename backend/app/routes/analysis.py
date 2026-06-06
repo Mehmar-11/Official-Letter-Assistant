@@ -1,24 +1,23 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 
 from app.schemas.analysis import (
     AnalyzeTextRequest,
     AnalyzeTextResponse,
     FollowUpRequest,
     FollowUpResponse,
+    ChatRequest,
 )
 from app.services.analysis_service import analyze_letter_text
 from app.services.pdf_service import extract_text_from_pdf_bytes
 from app.services.followup_service import answer_followup_question
+from app.services.llm_service import chat_with_llm_stream
 
 
 router = APIRouter()
 
 
 def analyze_letter_or_raise_http_error(letter_text: str) -> AnalyzeTextResponse:
-    """
-    Analyze letter text and convert backend validation failures into a
-    controlled HTTP error instead of returning invalid output to the frontend.
-    """
     try:
         return analyze_letter_text(letter_text)
     except ValueError as error:
@@ -65,4 +64,20 @@ def follow_up(request: FollowUpRequest):
         raise HTTPException(
             status_code=502,
             detail="LLM follow-up response failed backend validation.",
+        ) from error
+
+
+@router.post("/chat")
+def chat(request: ChatRequest):
+    try:
+        stream = chat_with_llm_stream(
+            letter_text=request.letter_text,
+            analysis=request.analysis.model_dump(),
+            messages=request.messages,
+        )
+        return StreamingResponse(stream, media_type="text/plain")
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Chat request failed.",
         ) from error

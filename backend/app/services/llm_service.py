@@ -373,3 +373,84 @@ def answer_followup_with_llm(
         return call_openai_followup_provider(prompt)
 
     raise RuntimeError(f"Unsupported LLM provider: {LLM_PROVIDER}")
+
+CHAT_SYSTEM_PROMPT = """
+You are a helpful friend — not a robot, not a lawyer, not a government official.
+
+Someone living in Germany just received an official German letter they don't fully understand. You already read and analyzed it for them. Now they want to chat and ask questions about it.
+
+How to talk:
+- Talk like a real person. Short sentences. Casual tone.
+- Never say "certainly", "absolutely", "I'd be happy to", or anything that sounds like a customer service bot.
+- If something is unclear in the letter, just say "the letter doesn't say" — don't make things up.
+- If they ask something you can't answer from the letter, say so honestly, like a friend would.
+- Never give legal advice or guarantee outcomes. If it's serious, say "you might want to double-check with the office directly."
+- Keep answers short unless they ask for more detail.
+- Always reply in the same language the user writes in. If they write in Persian, reply in Persian. If Turkish, reply in Turkish. If English, reply in English.
+
+Letter text:
+{{LETTER_TEXT}}
+
+Structured analysis:
+{{ANALYSIS}}
+"""
+
+
+def build_chat_messages(
+    letter_text: str,
+    analysis: Dict[str, Any],
+    messages: list,
+) -> list:
+    system_content = (
+        CHAT_SYSTEM_PROMPT
+        .replace("{{LETTER_TEXT}}", letter_text)
+        .replace("{{ANALYSIS}}", json.dumps(analysis, indent=2, ensure_ascii=False))
+    )
+
+    history = [{"role": m.role, "content": m.content} for m in messages]
+
+    return [{"role": "system", "content": system_content}] + history
+
+
+def chat_with_llm(
+    letter_text: str,
+    analysis: Dict[str, Any],
+    messages: list,
+) -> str:
+    if not check_llm_config():
+        return "I can see your letter has been analyzed. What would you like to know about it?"
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+
+    chat_messages = build_chat_messages(letter_text, analysis, messages)
+
+    response = client.responses.create(
+        model=OPENAI_MODEL,
+        input=chat_messages,
+    )
+
+    return response.output_text
+from typing import Generator
+
+def chat_with_llm_stream(
+    letter_text: str,
+    analysis: Dict[str, Any],
+    messages: list,
+) -> Generator[str, None, None]:
+    if not check_llm_config():
+        yield "I can see your letter has been analyzed. What would you like to know about it?"
+        return
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    chat_messages = build_chat_messages(letter_text, analysis, messages)
+
+    stream = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=chat_messages,
+        stream=True,
+    )
+
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content
+        if delta is not None:
+            yield delta

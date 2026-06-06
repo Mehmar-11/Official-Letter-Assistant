@@ -32,3 +32,13 @@ class FollowUpRequest(BaseModel):
 class FollowUpResponse(BaseModel):
     summary: str
     details: List[str]
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatRequest(BaseModel):
+    letter_text: str
+    analysis: AnalyzeTextResponse
+    messages: List[ChatMessage]
