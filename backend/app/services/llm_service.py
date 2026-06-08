@@ -249,6 +249,39 @@ def analyze_letter_with_llm(letter_text: str) -> Dict[str, Any]:
     prompt = build_letter_analysis_prompt(letter_text)
     return call_llm_provider(prompt)
 
+def extract_text_from_image_with_llm(img_base64: str) -> str:
+    """
+    Extract text from a base64-encoded image using GPT-4o Vision.
+    Used for scanned or image-based PDFs.
+    """
+    if not check_llm_config():
+        return ""
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/png;base64,{img_base64}"
+                        }
+                    },
+                    {
+                        "type": "text",
+                        "text": "This is a scanned German official letter. Extract all the text exactly as it appears. Return only the extracted text, nothing else."
+                    }
+                ]
+            }
+        ],
+        max_tokens=4096,
+    )
+
+    return response.choices[0].message.content or ""
 
 FOLLOWUP_PROMPT = """
 You answer one guided follow-up question about one already analyzed German official letter.
