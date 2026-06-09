@@ -1,5 +1,4 @@
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
 
 from app.schemas.analysis import (
     AnalyzeTextRequest,
@@ -7,11 +6,12 @@ from app.schemas.analysis import (
     FollowUpRequest,
     FollowUpResponse,
     ChatRequest,
+    ChatResponse,
 )
 from app.services.analysis_service import analyze_letter_text
 from app.services.pdf_service import extract_text_from_pdf_bytes
 from app.services.followup_service import answer_followup_question
-from app.services.llm_service import chat_with_llm_stream
+from app.services.llm_service import chat_with_llm_stream, generate_reply_draft
 
 
 router = APIRouter()
@@ -66,16 +66,37 @@ def follow_up(request: FollowUpRequest):
             detail="LLM follow-up response failed backend validation.",
         ) from error
 
-
-@router.post("/chat")
+@router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     try:
+        if request.reply_intent:
+            draft = generate_reply_draft(
+                analysis=request.analysis.model_dump(),
+                intent=request.reply_intent,
+            )
+            return ChatResponse(reply=draft)
+
         stream = chat_with_llm_stream(
             letter_text=request.letter_text,
             analysis=request.analysis.model_dump(),
             messages=request.messages,
         )
-        return StreamingResponse(stream, media_type="text/plain")
+
+        reply = "".join(stream)
+
+        if reply.strip() == "REPLY_DRAFT_REQUESTED":
+            return ChatResponse(
+                reply="Sure! What's the purpose of your reply?",
+                ui_action="show_reply_options",
+                options=[
+                    "I already took care of it",
+                    "I need more time or have a question",
+                    "I disagree with this letter",
+                ]
+            )
+
+        return ChatResponse(reply=reply)
+
     except Exception as error:
         raise HTTPException(
             status_code=502,

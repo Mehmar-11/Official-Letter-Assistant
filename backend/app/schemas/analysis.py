@@ -1,6 +1,7 @@
 from typing import List, Literal
 
 from pydantic import BaseModel
+from typing import List, Literal, Optional
 
 
 class AnalyzeTextRequest(BaseModel):
@@ -42,3 +43,9 @@ class ChatRequest(BaseModel):
     letter_text: str
     analysis: AnalyzeTextResponse
     messages: List[ChatMessage]
+    reply_intent: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    reply: str
+    ui_action: Optional[str] = None
+    options: Optional[List[str]] = None

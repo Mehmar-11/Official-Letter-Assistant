@@ -415,11 +415,16 @@ Someone living in Germany just received an official German letter they don't ful
 How to talk:
 - Talk like a real person. Short sentences. Casual tone.
 - Never say "certainly", "absolutely", "I'd be happy to", or anything that sounds like a customer service bot.
-- If something is unclear in the letter, just say "the letter doesn't say" — don't make things up.
+- If something is unclear in the letter, say "the letter doesn't say" — don't make things up.
 - If they ask something you can't answer from the letter, say so honestly, like a friend would.
 - Never give legal advice or guarantee outcomes. If it's serious, say "you might want to double-check with the office directly."
 - Keep answers short unless they ask for more detail.
 - Always reply in the same language the user writes in. If they write in Persian, reply in Persian. If Turkish, reply in Turkish. If English, reply in English.
+
+Reply draft:
+- If the user asks you to write a reply, draft a reply, or respond to the letter, return exactly this token and nothing else: REPLY_DRAFT_REQUESTED
+- If the user's message is one of these intents: "I already took care of it", "I need more time or have a question", "I disagree with this letter" — return exactly this token and nothing else: REPLY_DRAFT_GENERATE::<their message>
+- Do not generate the draft yourself. Do not explain. Just return the token.
 
 Letter text:
 {{LETTER_TEXT}}
@@ -427,8 +432,6 @@ Letter text:
 Structured analysis:
 {{ANALYSIS}}
 """
-
-
 def build_chat_messages(
     letter_text: str,
     analysis: Dict[str, Any],
@@ -487,3 +490,52 @@ def chat_with_llm_stream(
         delta = chunk.choices[0].delta.content
         if delta is not None:
             yield delta
+
+REPLY_DRAFT_PROMPT = """
+You are writing a formal German reply letter on behalf of someone who received an official German letter.
+
+Use only the facts from the structured analysis below.
+Do not invent information that is not in the analysis.
+
+Rules:
+- Write in formal German, Sie form.
+- Keep it short — two short paragraphs maximum.
+- Use the reference number, sender name, and deadline from the analysis if available.
+- For any missing personal details, use these exact placeholders:
+  [IHR VOLLSTÄNDIGER NAME], [IHRE ADRESSE], [ORT, DATUM]
+- For any missing case-specific details, use:
+  [DATUM], [REFERENZ], [GRUND]
+- Start the letter with: [ORT, DATUM]
+- End with: Mit freundlichen Grüßen\n[IHR VOLLSTÄNDIGER NAME]
+- At the very top, add exactly this line:
+  "--- Bitte vor dem Absenden prüfen. Platzhalter in eckigen Klammern ausfüllen. ---"
+
+User intent:
+{{INTENT}}
+
+Structured analysis:
+{{ANALYSIS}}
+"""
+
+
+def generate_reply_draft(
+    analysis: Dict[str, Any],
+    intent: str,
+) -> str:
+    if not check_llm_config():
+        return "--- Bitte vor dem Absenden prüfen. Platzhalter in eckigen Klammern ausfüllen. ---\n\n[ORT, DATUM]\n\nSehr geehrte Damen und Herren,\n\nvielen Dank für Ihr Schreiben.\n\nMit freundlichen Grüßen\n[IHR VOLLSTÄNDIGER NAME]"
+
+    client = OpenAI(api_key=OPENAI_API_KEY)
+
+    prompt = (
+        REPLY_DRAFT_PROMPT
+        .replace("{{INTENT}}", intent)
+        .replace("{{ANALYSIS}}", json.dumps(analysis, indent=2, ensure_ascii=False))
+    )
+
+    response = client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return response.choices[0].message.content or ""
