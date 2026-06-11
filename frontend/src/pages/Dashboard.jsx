@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 
 export default function Dashboard({ onBack }) {
   const [text, setText] = useState("");
@@ -7,10 +9,50 @@ export default function Dashboard({ onBack }) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [animatedSummary, setAnimatedSummary] = useState("");
-  const [activeDetail, setActiveDetail] = useState("payment");
+  const [activeAccordion, setActiveAccordion] = useState("whatToDo");
   const [showAbout, setShowAbout] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [loadingStep, setLoadingStep] = useState("");
+  const [outputLanguage, setOutputLanguage] = useState("en");
+  const [showPreview, setShowPreview] = useState(false);
+  const [sessionLetterCount, setSessionLetterCount] = useState(0);
+  const [searchQuery, setSearchQuery] = useState(""); // ← NEW: Search state
+  const [analyzedLetters, setAnalyzedLetters] = useState([]); // ← NEW: Store analyzed letters
+  const [chatMessages, setChatMessages] = useState([
+    { role: "assistant", content: "Hey! I've read your letter. Ask me anything — I'll keep it simple. 👋" }
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessage, setStreamingMessage] = useState("");
+  
   const typewriterRef = useRef(null);
   const fileInputRef = useRef(null);
+  const chatEndRef = useRef(null);
+
+  const suggestions = [
+    "Help me draft a reply",
+    "What should I do first?",
+    "Is this urgent?",
+    "Explain in simpler words"
+  ];
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, streamingMessage]);
+
+  const steps = ["📄 Extracting text...", "🤖 AI analyzing...", "📊 Processing data...", "✨ Generating summary..."];
+
+  useEffect(() => {
+    let interval, stepIndex = 0;
+    if (loading) {
+      setLoadingStep(steps[0]);
+      interval = setInterval(() => {
+        stepIndex++;
+        if (stepIndex < steps.length) setLoadingStep(steps[stepIndex]);
+      }, 1200);
+    }
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const startTypewriter = (fullText) => {
     if (typewriterRef.current) clearInterval(typewriterRef.current);
@@ -36,13 +78,163 @@ export default function Dashboard({ onBack }) {
   };
 
   const handleDropZoneClick = () => fileInputRef.current?.click();
-  const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const f = e.dataTransfer.files[0];
-    if (f && f.type === "application/pdf") setFile(f);
-    else alert("Please drop a valid PDF");
+
+  // ========== SEARCH FUNCTION ==========
+  const getFilteredLetters = () => {
+    if (!searchQuery.trim()) return analyzedLetters;
+    return analyzedLetters.filter(letter => 
+      letter.sender?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      letter.letter_topic?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      letter.tldr?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      letter.required_actions?.some(a => a.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
+  };
+
+  // ========== COPY FUNCTION ==========
+  const copyToClipboard = () => {
+    if (!result) return;
+    
+    const textToCopy = `
+═══════════════════════════════════════════════════════════
+           GERMAN LETTER ASSISTANT - ANALYSIS
+═══════════════════════════════════════════════════════════
+
+📌 BOTTOM LINE
+───────────────────────────────────────────────────────────
+${result.tldr || "No summary available"}
+
+📋 LETTER INFORMATION
+───────────────────────────────────────────────────────────
+Sender:      ${result.sender || "Unknown"}
+Topic:       ${result.letter_topic || "Official letter"}
+Urgency:     ${result.urgency_level || "Medium"}
+
+✅ WHAT YOU NEED TO DO
+───────────────────────────────────────────────────────────
+${(result.required_actions || []).map((action, i) => `${i+1}. ${action}`).join('\n') || "None"}
+
+⏰ DEADLINES
+───────────────────────────────────────────────────────────
+${(result.deadlines || []).map(d => `• ${d}`).join('\n') || "None"}
+
+💳 PAYMENT INFORMATION
+───────────────────────────────────────────────────────────
+${(result.payment_information || []).map(p => `• ${p}`).join('\n') || "None"}
+
+📄 DOCUMENTS NEEDED
+───────────────────────────────────────────────────────────
+${(result.required_documents || []).map(d => `• ${d}`).join('\n') || "None"}
+
+⚠️ POSSIBLE CONSEQUENCES
+───────────────────────────────────────────────────────────
+${(result.possible_consequences || []).map(c => `• ${c}`).join('\n') || "None"}
+
+🛡️ THINGS TO BE CAREFUL ABOUT
+───────────────────────────────────────────────────────────
+${(result.unclear_or_risky_parts || []).map(r => `• ${r}`).join('\n') || "None"}
+
+📌 ADDITIONAL DETAILS
+───────────────────────────────────────────────────────────
+${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
+
+═══════════════════════════════════════════════════════════
+⚠️ This is AI-generated help, not legal advice.
+   Please verify important information with the original letter.
+═══════════════════════════════════════════════════════════
+    `.trim();
+    
+    navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // ========== FIXED EXPORT TO PDF - Captures ALL sections ==========
+  const exportToPDF = async () => {
+    if (!result) return;
+    
+    // Create a temporary div with all content expanded for PDF
+    const pdfContainer = document.createElement('div');
+    pdfContainer.style.padding = '20px';
+    pdfContainer.style.background = 'white';
+    pdfContainer.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+    pdfContainer.style.width = '800px';
+    pdfContainer.style.color = '#111827';
+    
+    pdfContainer.innerHTML = `
+      <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">
+        <h1 style="color: #2563eb;">German Letter Assistant</h1>
+        <p style="color: #6b7280;">Analysis Report - ${new Date().toLocaleString()}</p>
+      </div>
+      
+      <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="color: #ca8a04; margin: 0 0 8px 0;">✨ Bottom line</h3>
+        <p style="font-size: 16px; font-weight: 600; margin: 0;">"${result.tldr || "No summary available"}"</p>
+      </div>
+      
+      <div style="margin-bottom: 16px;">
+        <p><strong>📧 Sender:</strong> ${result.sender || "Unknown"}</p>
+        <p><strong>🏷️ Topic:</strong> ${result.letter_topic || "Official letter"}</p>
+        <p><strong>⚠️ Urgency:</strong> ${result.urgency_level || "Medium"}</p>
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="margin: 0 0 12px 0;">✅ What you need to do</h3>
+        ${(result.required_actions || []).map((action, i) => `<p style="margin: 8px 0;">${i+1}. ${action}</p>`).join('') || "<p>None</p>"}
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="margin: 0 0 12px 0;">⏰ Deadlines</h3>
+        ${(result.deadlines || []).map(d => `<p style="margin: 8px 0;">• ${d}</p>`).join('') || "<p>None</p>"}
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="margin: 0 0 12px 0;">💳 Payment information</h3>
+        ${(result.payment_information || []).map(p => `<p style="margin: 8px 0;">• ${p}</p>`).join('') || "<p>None</p>"}
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="margin: 0 0 12px 0;">📄 Documents needed</h3>
+        ${(result.required_documents || []).map(d => `<p style="margin: 8px 0;">• ${d}</p>`).join('') || "<p>None</p>"}
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="margin: 0 0 12px 0;">⚠️ Possible consequences</h3>
+        ${(result.possible_consequences || []).map(c => `<p style="margin: 8px 0;">• ${c}</p>`).join('') || "<p>None</p>"}
+      </div>
+      
+      <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="margin: 0 0 12px 0;">🛡️ Things to be careful about</h3>
+        ${(result.unclear_or_risky_parts || []).map(r => `<p style="margin: 8px 0;">• ${r}</p>`).join('') || "<p>None</p>"}
+      </div>
+      
+      <div style="background: #f3e8ff; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+        <h3 style="margin: 0 0 12px 0;">📌 Additional details</h3>
+        ${(result.useful_details || []).map(u => `<p style="margin: 8px 0;">• ${u}</p>`).join('') || "<p>None</p>"}
+      </div>
+      
+      <div style="background: #f0fdf4; border-radius: 12px; padding: 12px; margin-top: 16px; text-align: center;">
+        <p style="margin: 0; font-size: 12px; color: #166534;">⚠️ This is AI-generated help, not legal advice. Please verify important information with the original letter.</p>
+      </div>
+      
+      <div style="text-align: center; margin-top: 20px; padding-top: 10px; border-top: 1px solid #e5e7eb; font-size: 10px; color: #9ca3af;">
+        Generated by German Letter Assistant
+      </div>
+    `;
+    
+    document.body.appendChild(pdfContainer);
+    
+    const canvas = await html2canvas(pdfContainer, {
+      scale: 2,
+      backgroundColor: 'white'
+    });
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const imgWidth = 190;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.addImage(imgData, "PNG", 10, 10, imgWidth, imgHeight);
+    pdf.save("letter-analysis.pdf");
+    
+    document.body.removeChild(pdfContainer);
   };
 
   const analyzeLetter = async () => {
@@ -52,20 +244,20 @@ export default function Dashboard({ onBack }) {
     setLoading(true);
     setResult(null);
     setAnimatedSummary("");
+    setChatMessages([{ role: "assistant", content: "Hey! I've read your letter. Ask me anything — I'll keep it simple. 👋" }]);
 
     try {
       let response;
       if (mode === "text") {
-        // ✅ Send JSON for text analysis
         response = await fetch("http://localhost:8000/analyze-text", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ letter_text: text }),
+          body: JSON.stringify({ letter_text: text, language: outputLanguage }),
         });
       } else {
-        // ✅ Send FormData for PDF
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("language", outputLanguage);
         response = await fetch("http://localhost:8000/analyze-pdf", {
           method: "POST",
           body: formData,
@@ -75,6 +267,14 @@ export default function Dashboard({ onBack }) {
       if (!response.ok) throw new Error("Backend error");
       const data = await response.json();
       setResult(data);
+      
+      // Store analyzed letter for search
+      setAnalyzedLetters(prev => [...prev, { 
+        id: Date.now(),
+        ...data,
+        timestamp: new Date().toLocaleString()
+      }]);
+      setSessionLetterCount(prev => prev + 1);
       startTypewriter(data.tldr || data.summary || "No summary available");
     } catch (err) {
       console.error(err);
@@ -84,154 +284,377 @@ export default function Dashboard({ onBack }) {
     }
   };
 
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || isStreaming) return;
+    
+    const userMessage = chatInput;
+    setChatInput("");
+    setChatMessages(prev => [...prev, { role: "user", content: userMessage }]);
+    
+    setIsStreaming(true);
+    setStreamingMessage("");
+    
+    try {
+      const response = await fetch("http://localhost:8000/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: userMessage,
+          letter_context: result,
+          language: outputLanguage
+        }),
+      });
+      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = "";
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.reply) {
+                fullResponse += data.reply;
+                setStreamingMessage(fullResponse);
+              }
+            } catch (e) {
+              fullResponse += line;
+              setStreamingMessage(fullResponse);
+            }
+          }
+        }
+      }
+      
+      setIsStreaming(false);
+      setChatMessages(prev => [...prev, { role: "assistant", content: fullResponse }]);
+    } catch (err) {
+      console.error(err);
+      setChatMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again." }]);
+    } finally {
+      setIsStreaming(false);
+      setStreamingMessage("");
+    }
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    setChatInput(suggestion);
+    setTimeout(() => sendChatMessage(), 100);
+  };
+
   const resetAnalysis = () => {
     if (typewriterRef.current) clearInterval(typewriterRef.current);
     setResult(null);
     setAnimatedSummary("");
     setText("");
     setFile(null);
+    setChatMessages([{ role: "assistant", content: "Hey! I've read your letter. Ask me anything — I'll keep it simple. 👋" }]);
+    setSessionLetterCount(0);
+    setAnalyzedLetters([]);
+    setSearchQuery("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const detailSections = {
-    payment: { title: "Payment details", content: result?.payment_information || [] },
-    documents: { title: "Documents needed", content: result?.required_documents || [] },
-    consequences: { title: "What happens if I ignore this?", content: result?.possible_consequences || [] },
-    careful: { title: "Things to be careful about", content: result?.unclear_or_risky_parts || [] },
+  const toggleAccordion = (id) => {
+    setActiveAccordion(activeAccordion === id ? null : id);
   };
+
+  const daysLeft = (() => {
+    if (!result?.deadlines?.[0]) return null;
+    const match = result.deadlines[0].match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    if (!match) return null;
+    const deadline = new Date(match[3], match[2] - 1, match[1]);
+    const diff = Math.ceil((deadline - new Date()) / (1000 * 60 * 60 * 24));
+    return diff > 0 ? diff : 0;
+  })();
+
+  const filteredLetters = getFilteredLetters();
 
   return (
     <div style={styles.page}>
-      <div style={styles.topBar}>
-        <div style={styles.brandRow}>
-          <div style={styles.logo}>MS</div>
-          <div style={styles.brand}>German Official Letter Assistant</div>
+      {/* Top Bar */}
+      <div style={styles.topbar}>
+        <div style={styles.brand}>
+          <div style={styles.brandIcon}>📄</div>
+          <div style={styles.brandName}>German <span style={{ color: "#2563eb" }}>Letter Assistant</span></div>
         </div>
         <div style={styles.topRight}>
-          <button style={styles.backBtn} onClick={onBack}>← Back to Home</button>
+          <select value={outputLanguage} onChange={(e) => setOutputLanguage(e.target.value)} style={styles.langSel}>
+            <option value="en">🇬🇧 English</option>
+            <option value="de">🇩🇪 Deutsch</option>
+            <option value="tr">🇹🇷 Türkçe</option>
+            <option value="ar">🇸🇦 العربية</option>
+          </select>
+          <button style={styles.backBtn} onClick={onBack}>← Back</button>
           <button style={styles.aboutBtn} onClick={() => setShowAbout(true)}>About</button>
         </div>
       </div>
 
-      <div style={styles.mainContainer}>
+      {/* Main Grid */}
+      <div style={styles.main}>
         {/* Left Panel */}
         <div style={styles.leftPanel}>
-          <div style={styles.sectionNumber}>1. Add your letter</div>
-          <div style={styles.switchRow}>
-            <button onClick={() => setMode("text")} style={mode === "text" ? styles.activeTab : styles.tab}>📄 Paste Text</button>
-            <button onClick={() => setMode("pdf")} style={mode === "pdf" ? styles.activeTab : styles.tab}>📑 Upload PDF</button>
-          </div>
+          <div style={styles.card}>
+            <div style={styles.cardHd}>
+              <div style={styles.stepBadge}>1</div>
+              <div style={styles.cardTitle}>Your letter</div>
+            </div>
+            
+            <div style={styles.modeToggle}>
+              <button onClick={() => setMode("text")} style={mode === "text" ? {...styles.modeBtn, ...styles.modeBtnActive} : styles.modeBtn}>
+                📄 Paste Text
+              </button>
+              <button onClick={() => setMode("pdf")} style={mode === "pdf" ? {...styles.modeBtn, ...styles.modeBtnActive} : styles.modeBtn}>
+                📑 Upload PDF
+              </button>
+            </div>
 
-          {mode === "text" ? (
-            <>
+            {mode === "text" ? (
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Paste your official letter here..."
-                style={styles.textarea}
-                rows={8}
+                placeholder="Paste your official German letter here..."
+                style={styles.fakeTextarea}
+                rows={6}
               />
-              <div style={styles.counter}>{text.length.toLocaleString()} characters</div>
-            </>
-          ) : (
-            <div style={styles.dropZone} onClick={handleDropZoneClick} onDragOver={handleDragOver} onDrop={handleDrop}>
-              <input type="file" ref={fileInputRef} accept="application/pdf" style={styles.hiddenInput} onChange={handleFileSelect} />
-              <div style={styles.dropIcon}>📄</div>
-              <div style={styles.dropText}>Drop PDF here or click to upload</div>
-              <div style={styles.dropSubtext}>Supported format: PDF (Max 10MB)</div>
-              {file && <div style={styles.fileName}>✓ Selected: {file.name}</div>}
+            ) : (
+              <div style={styles.dropZone} onClick={handleDropZoneClick}>
+                <input type="file" ref={fileInputRef} accept="application/pdf" style={{ display: "none" }} onChange={handleFileSelect} />
+                <div style={styles.dropIcon}>📄</div>
+                <div style={styles.dropText}>Click to upload PDF</div>
+                <div style={styles.dropSubtext}>or drag and drop</div>
+                {file && <div style={styles.fileName}>✓ {file.name}</div>}
+              </div>
+            )}
+
+            <button style={styles.btnNew} onClick={analyzeLetter} disabled={loading}>
+              ✨ {loading ? " Analyzing..." : " New Analysis"}
+            </button>
+
+            {loading && (
+              <div style={styles.loadingCard}>
+                <div style={styles.spinner}></div>
+                <div style={styles.loadingStep}>{loadingStep}</div>
+              </div>
+            )}
+
+            <div style={styles.previewToggle} onClick={() => setShowPreview(!showPreview)}>
+              <div style={styles.previewLabel}>📄 Letter preview</div>
+              <span>{showPreview ? "▲" : "▼"}</span>
             </div>
-          )}
+            
+            {showPreview && (
+              <div style={styles.previewText}>
+                {mode === "text" ? (text.substring(0, 200) + (text.length > 200 ? "..." : "") || "No text pasted yet...") : (file ? file.name : "No PDF selected...")}
+              </div>
+            )}
+          </div>
 
-          <button style={styles.analyzeBtn} onClick={analyzeLetter} disabled={loading}>
-            {loading ? "⏳ Analyzing..." : "✨ Analyze Letter"}
-          </button>
-
-          {loading && (
-            <div style={styles.loadingCard}>
-              <div style={styles.spinner}></div>
-              <div style={styles.loadingText}>Analyzing your letter...</div>
+          {/* Search Section - NOW FUNCTIONAL */}
+          <div style={{ ...styles.card, marginTop: 0 }}>
+            <div style={{ ...styles.cardHd, marginBottom: "10px" }}>
+              <span style={{ fontSize: "15px" }}>🔍</span>
+              <div style={{ ...styles.cardTitle, color: "#6b7280" }}>Search your letters</div>
             </div>
-          )}
-
-          <div style={styles.infoCard}>
-            <div style={styles.infoTitle}>🔒 Your data is private</div>
-            <div style={styles.infoText}>Document processed temporarily, not stored.</div>
-            <div style={styles.infoText}><span style={{ color: "#ef4444" }}>⚠️ AI can make mistakes.</span> Not legal advice.</div>
+            <div style={styles.searchInput}>
+              <span>🔍</span>
+              <input 
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by sender, topic, action..."
+                style={styles.searchInputField}
+              />
+            </div>
+            
+            {/* Search Results */}
+            {searchQuery && filteredLetters.length > 0 && (
+              <div style={styles.searchResults}>
+                {filteredLetters.map(letter => (
+                  <div key={letter.id} style={styles.searchResultItem}>
+                    <div style={styles.searchResultSender}>📧 {letter.sender}</div>
+                    <div style={styles.searchResultTopic}>🏷️ {letter.letter_topic}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {searchQuery && filteredLetters.length === 0 && (
+              <div style={styles.searchNoResults}>No matching letters found</div>
+            )}
+            
+            <div style={styles.sessionNote}>
+              {sessionLetterCount} letter{sessionLetterCount !== 1 ? 's' : ''} in this session
+            </div>
           </div>
         </div>
 
         {/* Right Panel */}
         <div style={styles.rightPanel}>
-          <div style={styles.sectionNumber}>2. Analysis Result</div>
-
-          {!result && !loading && (
-            <div style={styles.emptyState}>
-              <div>📄 No letter analyzed yet</div>
-              <div style={{ fontSize: 13, marginTop: 8, color: "#94a3b8" }}>Paste or upload a letter to see analysis</div>
+          <div id="resultsArea" style={styles.resultsArea}>
+            <div style={{ ...styles.cardHd, marginBottom: "8px" }}>
+              <div style={styles.stepBadge}>2</div>
+              <div style={styles.cardTitle}>Analysis Result</div>
             </div>
-          )}
 
-          {loading && !result && (
-            <div>
-              <div style={styles.heroSkeleton}></div>
-              <div style={styles.skeletonCard}></div>
-            </div>
-          )}
-
-          {result && (
-            <div style={styles.resultContent}>
-              <div style={styles.heroCard}>
-                <div style={styles.heroTitle}>✨ Bottom line</div>
-                <div style={styles.heroText}>{animatedSummary || result.tldr}</div>
-                <div style={styles.metaSection}>
-                  <div><div style={styles.metaLabel}>Urgency</div><div style={styles.orangeBadge}>{result.urgency_level || "Medium"}</div></div>
-                  <div><div style={styles.metaLabel}>Sender</div><div style={styles.metaValue}>{result.sender || "—"}</div></div>
-                  <div><div style={styles.metaLabel}>Topic</div><div style={styles.metaValue}>{result.letter_topic || "—"}</div></div>
-                </div>
+            {!result && !loading && (
+              <div style={styles.emptyState}>
+                <div style={{ fontSize: "48px", marginBottom: "12px" }}>📄</div>
+                <div>No letter analyzed yet</div>
+                <div style={{ fontSize: "11px", marginTop: "6px", color: "#9ca3af" }}>Paste or upload a letter to see analysis</div>
               </div>
+            )}
 
-              {/* What you need to do – without checkboxes */}
-              <div style={styles.card}>
-                <div style={styles.cardTitle}>✅ What you need to do</div>
-                {(result.required_actions || []).map((action, i) => (
-                  <div key={i} style={styles.actionItemPlain}>
-                    {i+1}. {action}
+            {loading && !result && (
+              <div><div style={styles.skeletonCard}></div><div style={styles.skeletonCard}></div></div>
+            )}
+
+            {result && (
+              <>
+                {/* Bottom Line Card */}
+                <div style={styles.bottomLineCard}>
+                  <div style={styles.blLabel}>✨ Bottom line</div>
+                  <div style={styles.blText}>"{animatedSummary || result.tldr}"</div>
+                </div>
+
+                {/* Meta Row */}
+                <div style={styles.metaRow}>
+                  <span>📧 {result.sender || "Unknown sender"}</span>
+                  <span>🏷️ {result.letter_topic || "Official letter"}</span>
+                  <span style={styles.urgencyBadge}>⚠️ {result.urgency_level || "Medium"} urgency</span>
+                </div>
+
+                {/* Deadline Badge */}
+                {daysLeft && (
+                  <div style={styles.deadlineBadge}>
+                    ⏰ {daysLeft} days left to act
                   </div>
-                ))}
-              </div>
+                )}
 
-              <div style={styles.specificDetailsSection}>
-                <div style={styles.specificDetailsTitle}>🔍 Check specific details</div>
-                <div style={styles.specificDetailsSub}>Explore key aspects of this letter.</div>
-                <div style={styles.detailButtons}>
-                  <button onClick={() => setActiveDetail("payment")} style={activeDetail === "payment" ? styles.detailBtnActive : styles.detailBtn}>💳 Payment details</button>
-                  <button onClick={() => setActiveDetail("documents")} style={activeDetail === "documents" ? styles.detailBtnActive : styles.detailBtn}>📄 Documents needed</button>
-                  <button onClick={() => setActiveDetail("consequences")} style={activeDetail === "consequences" ? styles.detailBtnActive : styles.detailBtn}>⚠️ What happens if I ignore this?</button>
-                  <button onClick={() => setActiveDetail("careful")} style={activeDetail === "careful" ? styles.detailBtnActive : styles.detailBtn}>🛡 Things to be careful about</button>
+                {/* Reliability Card */}
+                <div style={styles.reliability}>
+                  <div style={styles.relTitle}>🛡️ {result.confidence_score > 80 ? "Reliable analysis" : "Analysis with caution"}</div>
+                  <div style={styles.relSub}>
+                    {result.confidence_score > 80 ? "Text was clear — all fields extracted successfully." :
+                     result.confidence_score > 50 ? "Some information may be incomplete. Verify key details." :
+                     "Low confidence — please verify all information with the original letter."}
+                  </div>
                 </div>
-                <div style={styles.detailContent}>
-                  <div style={styles.detailContentTitle}>{detailSections[activeDetail].title}</div>
-                  {detailSections[activeDetail].content.map((item, i) => (
-                    <div key={i} style={styles.detailContentItem}>• {item}</div>
+
+                {/* Accordions */}
+                <div style={styles.accordionWrap}>
+                  {[
+                    { id: "whatToDo", icon: "✅", title: "What to do", items: result.required_actions },
+                    { id: "payment", icon: "💳", title: "Payment details", items: result.payment_information },
+                    { id: "documents", icon: "📄", title: "Documents needed", items: result.required_documents },
+                    { id: "risks", icon: "⚠️", title: "Risks if ignored", items: result.possible_consequences }
+                  ].map(section => (
+                    <div key={section.id} style={styles.accordionItem}>
+                      <div style={styles.accordionHd} onClick={() => toggleAccordion(section.id)}>
+                        <div style={{ ...styles.accordionTitle, color: activeAccordion === section.id ? "#2563eb" : "#374151" }}>
+                          {section.icon} {section.title}
+                        </div>
+                        <span>{activeAccordion === section.id ? "▲" : "▼"}</span>
+                      </div>
+                      {activeAccordion === section.id && (
+                        <div style={styles.accordionBody}>
+                          {(section.items || []).map((item, i) => (
+                            <div key={i} style={styles.accItem}>▶ {item}</div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
-              </div>
 
-              {/* Additional details (duplicate section removed) */}
-              <div style={styles.additionalDetailsCard}>
-                <div style={styles.additionalDetailsTitle}>📌 Additional details</div>
-                <div style={styles.additionalDetailsContent}>
-                  Reference numbers and other extra details from the letter.<br /><br />
-                  • {result.useful_details?.[0] || "None"}
+                {/* Things to be careful about */}
+                {result.unclear_or_risky_parts && result.unclear_or_risky_parts.length > 0 && (
+                  <div style={styles.accordionItem}>
+                    <div style={styles.accordionHd} onClick={() => toggleAccordion("careful")}>
+                      <div style={{ ...styles.accordionTitle, color: activeAccordion === "careful" ? "#2563eb" : "#374151" }}>
+                        🛡️ Things to be careful about
+                      </div>
+                      <span>{activeAccordion === "careful" ? "▲" : "▼"}</span>
+                    </div>
+                    {activeAccordion === "careful" && (
+                      <div style={styles.accordionBody}>
+                        {result.unclear_or_risky_parts.map((item, i) => (
+                          <div key={i} style={styles.accItem}>▶ {item}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Additional Details */}
+                {result.useful_details && result.useful_details.length > 0 && (
+                  <div style={styles.additionalDetailsCard}>
+                    <div style={styles.additionalDetailsTitle}>📌 Additional details</div>
+                    <div style={styles.additionalDetailsContent}>
+                      {(result.useful_details || []).map((detail, i) => (
+                        <div key={i}>• {detail}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={styles.safetyCard}>🛡️ {result.safety_note || "This is AI-generated help, not legal advice."}</div>
+
+                {/* Action Buttons */}
+                <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+                  <button style={styles.iconBtn} onClick={copyToClipboard}>📋 {copied ? "Copied!" : "Copy All"}</button>
+                  <button style={styles.iconBtn} onClick={exportToPDF}>📄 Export PDF</button>
+                  <button style={styles.iconBtn} onClick={resetAnalysis}>🔄 New Analysis</button>
                 </div>
+              </>
+            )}
+          </div>
+
+          {/* Chat Section */}
+          <div style={styles.chatSection}>
+            <div style={styles.chatHeader}>
+              <div style={styles.onlineDot}></div>
+              <div>
+                <div style={styles.chatTitle}>💬 Chat with Assistant</div>
+                <div style={styles.chatSub}>Ask anything about this letter</div>
               </div>
-
-              <div style={styles.safetyCard}>🛡 {result.safety_note || "This is AI-generated help, not legal advice."}</div>
-
-              <button style={styles.newAnalysisBtn} onClick={resetAnalysis}>🔄 Analyze Another Letter</button>
             </div>
-          )}
+
+            <div style={styles.chatMessages}>
+              {chatMessages.map((msg, idx) => (
+                <div key={idx} style={{ ...styles.msg, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                  <div style={{ ...styles.bubble, ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble) }}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {isStreaming && streamingMessage && (
+                <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
+                  <div style={{ ...styles.bubble, ...styles.assistantBubble }}>{streamingMessage}<span style={styles.cursor}>|</span></div>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            <div style={styles.suggestions}>
+              {suggestions.map((sug, i) => (
+                <div key={i} style={styles.sug} onClick={() => handleSuggestionClick(sug)}>{sug}</div>
+              ))}
+            </div>
+
+            <div style={styles.chatInputRow}>
+              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyPress={(e) => e.key === "Enter" && sendChatMessage()} placeholder="Ask anything about this letter..." style={styles.chatInput} disabled={isStreaming} />
+              <button style={styles.sendBtn} onClick={sendChatMessage} disabled={isStreaming}>➤</button>
+            </div>
+
+            <div style={styles.privacyRow}>
+              🔒 Nothing is saved — your data disappears when you close this tab.
+            </div>
+          </div>
         </div>
       </div>
 
@@ -239,11 +662,11 @@ export default function Dashboard({ onBack }) {
       {showAbout && (
         <div style={styles.modalOverlay} onClick={() => setShowAbout(false)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h3>ℹ️ German Official Letter Assistant</h3>
-            <p><strong>Version:</strong> 1.0</p>
-            <p><strong>How it works:</strong> AI extracts key information from official German letters – deadlines, payment details, risks – and presents them in a clear, actionable format.</p>
+            <h3>ℹ️ German Letter Assistant</h3>
+            <p><strong>Version:</strong> 2.0</p>
+            <p><strong>Features:</strong> OCR, Smart Chat with Streaming, Reply Draft Assistant, Multi-language Output</p>
             <p><strong>Privacy:</strong> Your documents are processed temporarily and not stored.</p>
-            <p><strong>Disclaimer:</strong> This is AI‑generated help, not legal advice. Always verify with the issuing organization.</p>
+            <p><strong>Disclaimer:</strong> This is AI‑generated help, not legal advice.</p>
             <button style={styles.modalClose} onClick={() => setShowAbout(false)}>Close</button>
           </div>
         </div>
@@ -252,51 +675,138 @@ export default function Dashboard({ onBack }) {
   );
 }
 
+// ========== STYLES ==========
 const styles = {
-  page: { height: "100vh", width: "100vw", background: "#f3f6fb", fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", color: "#111827", display: "flex", flexDirection: "column", overflow: "hidden", boxSizing: "border-box" },
-  topBar: { height: 56, background: "white", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", flexShrink: 0 },
-  brandRow: { display: "flex", alignItems: "center", gap: 8 },
-  logo: { width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg, #2563eb, #1d4ed8)", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 16 },
-  brand: { fontWeight: 700, fontSize: 16 },
-  topRight: { display: "flex", alignItems: "center", gap: 12 },
-  backBtn: { border: "1px solid #2563eb", background: "#eff6ff", color: "#2563eb", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: 11, fontWeight: 500 },
-  aboutBtn: { border: "1px solid #e5e7eb", background: "white", padding: "4px 10px", borderRadius: 6, cursor: "pointer", fontSize: 11 },
-  mainContainer: { display: "flex", gap: 12, padding: 12, flex: 1, minHeight: 0, overflow: "hidden" },
-  leftPanel: { width: 360, background: "white", borderRadius: 16, border: "1px solid #e5e7eb", padding: 14, display: "flex", flexDirection: "column", overflowY: "auto", gap: 10, flexShrink: 0 },
-  rightPanel: { flex: 1, background: "white", borderRadius: 16, border: "1px solid #e5e7eb", padding: 14, overflowY: "auto" },
-  sectionNumber: { fontSize: 15, fontWeight: 700, marginBottom: 8 },
-  switchRow: { display: "flex", gap: 8, marginBottom: 10 },
-  tab: { flex: 1, padding: "6px 0", borderRadius: 40, border: "1px solid #e5e7eb", background: "#f8fafc", cursor: "pointer", textAlign: "center", fontSize: 11, fontWeight: 500 },
-  activeTab: { flex: 1, padding: "6px 0", borderRadius: 40, border: "1px solid #2563eb", background: "#eff6ff", color: "#2563eb", fontWeight: 600, cursor: "pointer", textAlign: "center", fontSize: 11 },
-  textarea: { width: "100%", minHeight: 160, border: "1px solid #dbe3ee", borderRadius: 12, padding: 10, fontSize: 12, outline: "none", background: "#fafcff", fontFamily: "monospace", resize: "vertical" },
-  counter: { textAlign: "right", marginTop: 4, fontSize: 10, color: "#9ca3af" },
-  dropZone: { border: "2px dashed #c7d2fe", borderRadius: 12, padding: 20, textAlign: "center", background: "#f8fbff", cursor: "pointer", minHeight: 160, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6 },
-  dropIcon: { fontSize: 32 }, dropText: { fontSize: 12, color: "#4b5563", fontWeight: 500 }, dropSubtext: { fontSize: 10, color: "#9ca3af" }, hiddenInput: { display: "none" }, fileName: { marginTop: 6, color: "#2563eb", fontSize: 11, fontWeight: 500 },
-  analyzeBtn: { width: "100%", marginTop: 10, padding: 10, borderRadius: 40, border: "none", background: "linear-gradient(135deg, #2563eb, #1d4ed8)", color: "white", fontWeight: 600, fontSize: 13, cursor: "pointer" },
-  loadingCard: { marginTop: 10, padding: 12, background: "#f8fafc", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 10, border: "1px solid #e2e8f0" },
-  spinner: { width: 20, height: 20, border: "3px solid #e2e8f0", borderTop: "3px solid #2563eb", borderRadius: "50%", animation: "spin 1s linear infinite" },
-  loadingText: { fontSize: 12, color: "#475569", fontWeight: 500 },
-  infoCard: { marginTop: 10, border: "1px solid #fef3c7", borderRadius: 12, padding: 10, background: "#fffbeb" }, infoTitle: { fontWeight: 600, marginBottom: 4, fontSize: 11 }, infoText: { fontSize: 9, color: "#6b7280", marginTop: 2 },
-  emptyState: { height: 250, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", color: "#94a3b8", textAlign: "center" },
-  resultContent: { display: "flex", flexDirection: "column", gap: 10 },
-  heroCard: { background: "#fefce8", border: "1px solid #fef08a", borderRadius: 14, padding: 12, marginBottom: 2 }, heroTitle: { fontSize: 10, fontWeight: 700, color: "#ca8a04", textTransform: "uppercase" }, heroText: { marginTop: 6, fontSize: 15, fontWeight: 700, lineHeight: 1.3, color: "#1e293b" },
-  metaSection: { display: "flex", gap: 16, marginTop: 12, flexWrap: "wrap" }, metaLabel: { fontSize: 9, color: "#6b7280", marginBottom: 2 }, metaValue: { fontWeight: 600, fontSize: 11 }, orangeBadge: { display: "inline-flex", background: "#ffedd5", color: "#ea580c", padding: "2px 8px", borderRadius: 40, fontWeight: 600, fontSize: 9 },
-  card: { background: "white", border: "1px solid #e2e8f0", borderRadius: 12, padding: 12, marginBottom: 2 }, cardTitle: { fontWeight: 700, marginBottom: 8, fontSize: 12 },
-  actionItemPlain: { padding: "6px 0", borderBottom: "1px solid #f1f5f9", fontSize: 11, color: "#1e293b" },
-  specificDetailsSection: { background: "#f8fafc", borderRadius: 12, padding: 12, marginBottom: 2 }, specificDetailsTitle: { fontWeight: 700, fontSize: 13, marginBottom: 2 }, specificDetailsSub: { fontSize: 10, color: "#64748b", marginBottom: 10 },
-  detailButtons: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }, detailBtn: { padding: "4px 10px", borderRadius: 40, border: "1px solid #e2e8f0", background: "white", cursor: "pointer", fontSize: 10, fontWeight: 500 }, detailBtnActive: { padding: "4px 10px", borderRadius: 40, border: "1px solid #2563eb", background: "#eff6ff", color: "#2563eb", cursor: "pointer", fontSize: 10, fontWeight: 600 },
-  detailContent: { background: "white", borderRadius: 10, padding: 10, border: "1px solid #e2e8f0" }, detailContentTitle: { fontWeight: 700, marginBottom: 8, fontSize: 11 }, detailContentItem: { padding: "4px 0", fontSize: 10, color: "#475569", borderBottom: "1px solid #f1f5f9" },
-  additionalDetailsCard: { background: "#f3e8ff", borderRadius: 12, padding: 12, marginBottom: 2 }, additionalDetailsTitle: { fontWeight: 700, fontSize: 11, marginBottom: 8, color: "#6b21a5" }, additionalDetailsContent: { fontSize: 10, color: "#4c1d95", lineHeight: 1.5 },
-  safetyCard: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: 10, fontSize: 10, color: "#166534" },
-  newAnalysisBtn: { width: "100%", marginTop: 12, padding: 8, borderRadius: 40, border: "1px solid #2563eb", background: "white", color: "#2563eb", fontWeight: 600, fontSize: 12, cursor: "pointer" },
-  heroSkeleton: { height: 120, borderRadius: 14, background: "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)", backgroundSize: "200% 100%", marginBottom: 10 },
-  skeletonCard: { height: 140, borderRadius: 12, background: "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)", backgroundSize: "200% 100%" },
+  page: {
+    background: "#f3f6fb",
+    minHeight: "100vh",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    color: "#111827",
+  },
+  topbar: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: "12px 24px",
+    background: "white",
+    borderBottom: "1px solid #e5e7eb",
+  },
+  brand: { display: "flex", alignItems: "center", gap: "10px" },
+  brandIcon: { fontSize: "24px" },
+  brandName: { fontSize: "16px", fontWeight: 600, color: "#1e293b" },
+  topRight: { display: "flex", alignItems: "center", gap: "12px" },
+  langSel: {
+    background: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: "8px",
+    padding: "5px 12px",
+    fontSize: "12px",
+    cursor: "pointer",
+  },
+  backBtn: {
+    border: "1px solid #e5e7eb",
+    background: "white",
+    padding: "5px 12px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "12px",
+  },
+  aboutBtn: {
+    border: "1px solid #e5e7eb",
+    background: "white",
+    padding: "5px 12px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "12px",
+  },
+  main: {
+    display: "grid",
+    gridTemplateColumns: "300px 1fr",
+    minHeight: "calc(100vh - 55px)",
+  },
+  leftPanel: { padding: "16px", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", gap: "12px", background: "#fafcff" },
+  rightPanel: { display: "flex", flexDirection: "column" },
+  card: { background: "white", border: "1px solid #e5e7eb", borderRadius: "16px", padding: "16px" },
+  cardHd: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" },
+  stepBadge: {
+    width: "22px", height: "22px", borderRadius: "50%", background: "#2563eb", color: "white",
+    fontSize: "10px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
+  },
+  cardTitle: { fontSize: "13px", fontWeight: 600, color: "#1e293b" },
+  modeToggle: { display: "flex", gap: "8px", marginBottom: "12px" },
+  modeBtn: { flex: 1, padding: "8px", borderRadius: "40px", fontSize: "12px", fontWeight: 500, cursor: "pointer", border: "1px solid #e5e7eb", background: "#f8fafc", color: "#6b7280" },
+  modeBtnActive: { background: "#eff6ff", border: "1px solid #2563eb", color: "#2563eb" },
+  fakeTextarea: {
+    width: "100%", minHeight: "140px", border: "1px solid #e5e7eb", borderRadius: "12px",
+    padding: "12px", fontSize: "12px", outline: "none", background: "white", fontFamily: "monospace", resize: "vertical",
+  },
+  dropZone: {
+    border: "2px dashed #c7d2fe", borderRadius: "12px", padding: "24px", textAlign: "center",
+    background: "#f8fbff", cursor: "pointer", minHeight: "140px", display: "flex", flexDirection: "column",
+    alignItems: "center", justifyContent: "center", gap: "6px",
+  },
+  dropIcon: { fontSize: "32px" }, dropText: { fontSize: "12px", color: "#4b5563" }, dropSubtext: { fontSize: "10px", color: "#9ca3af" },
+  fileName: { marginTop: "6px", color: "#2563eb", fontSize: "11px", fontWeight: 500 },
+  btnNew: { width: "100%", marginTop: "12px", padding: "10px", borderRadius: "40px", background: "#2563eb", color: "white", border: "none", fontSize: "13px", fontWeight: 600, cursor: "pointer" },
+  loadingCard: { marginTop: "12px", padding: "12px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px solid #e5e7eb" },
+  spinner: { width: "20px", height: "20px", border: "2px solid #e5e7eb", borderTop: "2px solid #2563eb", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 8px" },
+  loadingStep: { fontSize: "10px", color: "#2563eb" },
+  previewToggle: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "8px", cursor: "pointer", marginTop: "8px", fontSize: "10px" },
+  previewLabel: { display: "flex", alignItems: "center", gap: "5px", color: "#6b7280" },
+  previewText: { background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "10px", fontSize: "10px", marginTop: "6px", maxHeight: "100px", overflowY: "auto", color: "#6b7280" },
+  searchInput: { display: "flex", gap: "6px", alignItems: "center", background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "8px 10px", marginBottom: "6px" },
+  searchInputField: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: "11px" },
+  searchResults: { marginTop: "8px", maxHeight: "150px", overflowY: "auto" },
+  searchResultItem: { padding: "8px", borderBottom: "1px solid #e5e7eb", fontSize: "10px" },
+  searchResultSender: { fontWeight: 600, color: "#2563eb" },
+  searchResultTopic: { color: "#6b7280", marginTop: "2px" },
+  searchNoResults: { fontSize: "10px", color: "#9ca3af", textAlign: "center", padding: "12px" },
+  sessionNote: { fontSize: "10px", color: "#9ca3af", marginTop: "6px" },
+  resultsArea: { flex: 1, padding: "16px", display: "flex", flexDirection: "column", gap: "12px", overflowY: "auto", maxHeight: "calc(100vh - 380px)" },
+  emptyState: { textAlign: "center", padding: "48px 20px", color: "#9ca3af", background: "white", borderRadius: "16px", border: "1px solid #e5e7eb" },
+  bottomLineCard: { background: "#fefce8", border: "1px solid #fef08a", borderRadius: "16px", padding: "16px" },
+  blLabel: { fontSize: "10px", color: "#ca8a04", fontWeight: 700, textTransform: "uppercase", marginBottom: "6px" },
+  blText: { fontSize: "15px", fontWeight: 600, lineHeight: 1.4, color: "#1e293b" },
+  metaRow: { display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "11px", color: "#6b7280", alignItems: "center" },
+  urgencyBadge: { display: "inline-flex", alignItems: "center", gap: "4px", color: "#ea580c", fontWeight: 600 },
+  deadlineBadge: { display: "inline-flex", alignItems: "center", gap: "6px", background: "#fef3c7", border: "1px solid #fed7aa", borderRadius: "8px", padding: "5px 12px", fontSize: "11px", color: "#ea580c", fontWeight: 600, width: "fit-content" },
+  reliability: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "10px 14px" },
+  relTitle: { fontSize: "12px", fontWeight: 600, color: "#166534", marginBottom: "3px" },
+  relSub: { fontSize: "10px", color: "#6b7280" },
+  accordionWrap: { display: "flex", flexDirection: "column", gap: "6px" },
+  accordionItem: { border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden" },
+  accordionHd: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", cursor: "pointer", background: "white" },
+  accordionTitle: { fontSize: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "7px" },
+  accordionBody: { padding: "10px 14px", background: "#f8fafc", borderTop: "1px solid #e5e7eb" },
+  accItem: { fontSize: "11px", color: "#4b5563", lineHeight: 1.5, marginBottom: "6px" },
+  additionalDetailsCard: { background: "#f3e8ff", borderRadius: "12px", padding: "12px", border: "1px solid #e9d5ff" },
+  additionalDetailsTitle: { fontWeight: 700, fontSize: "11px", marginBottom: "8px", color: "#6b21a5" },
+  additionalDetailsContent: { fontSize: "10px", color: "#4c1d95", lineHeight: 1.5 },
+  safetyCard: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "10px", fontSize: "10px", color: "#166534" },
+  iconBtn: { background: "white", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "6px 12px", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" },
+  chatSection: { borderTop: "1px solid #e5e7eb", background: "white" },
+  chatHeader: { padding: "12px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: "10px" },
+  onlineDot: { width: "8px", height: "8px", borderRadius: "50%", background: "#22c55e" },
+  chatTitle: { fontSize: "13px", fontWeight: 600 }, chatSub: { fontSize: "10px", color: "#9ca3af" },
+  chatMessages: { padding: "14px 20px", display: "flex", flexDirection: "column", gap: "8px", maxHeight: "240px", overflowY: "auto", background: "#fafcff" },
+  msg: { display: "flex" },
+  bubble: { padding: "8px 12px", borderRadius: "12px", fontSize: "12px", lineHeight: 1.5, maxWidth: "70%" },
+  userBubble: { background: "#2563eb", color: "white", borderBottomRightRadius: "4px" },
+  assistantBubble: { background: "#f1f5f9", color: "#1e293b", borderBottomLeftRadius: "4px" },
+  cursor: { display: "inline-block", width: "2px", height: "12px", background: "#2563eb", marginLeft: "2px", animation: "blink 1s infinite" },
+  suggestions: { padding: "8px 20px", display: "flex", gap: "6px", flexWrap: "wrap", borderTop: "1px solid #e5e7eb", background: "white" },
+  sug: { padding: "4px 10px", borderRadius: "20px", border: "1px solid #e5e7eb", fontSize: "11px", cursor: "pointer", background: "#f8fafc" },
+  chatInputRow: { padding: "10px 20px", borderTop: "1px solid #e5e7eb", display: "flex", gap: "8px", alignItems: "center", background: "white" },
+  chatInput: { flex: 1, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "24px", padding: "10px 16px", fontSize: "12px", outline: "none" },
+  sendBtn: { width: "36px", height: "36px", borderRadius: "50%", background: "#2563eb", border: "none", color: "white", cursor: "pointer", fontSize: "16px" },
+  privacyRow: { padding: "8px 20px", borderTop: "1px solid #e5e7eb", fontSize: "10px", color: "#9ca3af", display: "flex", alignItems: "center", gap: "6px", background: "#fafcff" },
+  skeletonCard: { height: "100px", borderRadius: "12px", background: "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)", backgroundSize: "200% 100%", marginBottom: "10px" },
   modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-  modalContent: { background: "white", padding: 24, borderRadius: 24, maxWidth: 450, width: "90%", boxShadow: "0 20px 35px -10px black" },
-  modalClose: { marginTop: 16, padding: "8px 16px", background: "#2563eb", color: "white", border: "none", borderRadius: 40, cursor: "pointer" },
+  modalContent: { background: "white", padding: "24px", borderRadius: "24px", maxWidth: "450px", width: "90%" },
+  modalClose: { marginTop: "16px", padding: "8px 16px", background: "#2563eb", color: "white", border: "none", borderRadius: "40px", cursor: "pointer" },
 };
 
-// Add keyframe animation for spinner
+// Add animations
 const styleSheet = document.createElement("style");
-styleSheet.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+styleSheet.textContent = `@keyframes spin { to { transform: rotate(360deg); } } @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }`;
 document.head.appendChild(styleSheet);

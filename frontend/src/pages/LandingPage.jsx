@@ -21,10 +21,7 @@ export default function LandingPage({ onStart }) {
           </h2>
 
           <p style={styles.text}>
-            Imagine receiving a health insurance reminder in German –
-            with payment rules, multiple deadlines, and possible
-            consequences. Our app tells you what to do, what to watch
-            out for, and what happens if you miss a deadline.
+            Health insurance, bank notices, government letters – any official German letter can be confusing. Our app tells you what to do, what to watch out for, and what happens if you miss a deadline.
           </p>
 
           <button style={styles.button} onClick={onStart}>
@@ -69,7 +66,7 @@ export default function LandingPage({ onStart }) {
 
 const styles = {
   page: {
-    height: "100vh",           // Changed from minHeight to height
+    height: "100vh",
     width: "100%",
     background: "linear-gradient(135deg, #faf7ff, #f4f0ff)",
     fontFamily:
@@ -77,9 +74,9 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "20px",           // Reduced padding
+    padding: "20px",
     boxSizing: "border-box",
-    overflow: "hidden",        // Prevents scrolling
+    overflow: "hidden",
   },
 
   content: {
@@ -88,19 +85,19 @@ const styles = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: "40px",               // Reduced gap
+    gap: "40px",
     flexWrap: "wrap",
   },
 
   left: {
     flex: 1,
-    minWidth: "300px",         // Reduced minWidth
-    maxWidth: "550px",         // Added maxWidth for better fit
+    minWidth: "300px",
+    maxWidth: "550px",
   },
 
   right: {
     flex: 1,
-    minWidth: "350px",         // Reduced minWidth
+    minWidth: "350px",
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
@@ -108,7 +105,7 @@ const styles = {
 
   heroImage: {
     width: "100%",
-    maxWidth: "700px",         // Reduced maxWidth
+    maxWidth: "700px",
     height: "auto",
     objectFit: "contain",
   },
@@ -117,11 +114,11 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "12px",
-    marginBottom: "20px",      // Reduced margin
+    marginBottom: "20px",
   },
 
   logo: {
-    width: "48px",             // Slightly smaller
+    width: "48px",
     height: "48px",
     borderRadius: "14px",
     background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
@@ -134,7 +131,7 @@ const styles = {
   },
 
   title: {
-    fontSize: "28px",          // Reduced font size
+    fontSize: "28px",
     fontWeight: "700",
     color: "#1e1b4b",
     margin: 0,
@@ -145,11 +142,11 @@ const styles = {
     height: "4px",
     background: "#7c3aed",
     borderRadius: "20px",
-    marginBottom: "24px",      // Reduced margin
+    marginBottom: "24px",
   },
 
   heading: {
-    fontSize: "40px",          // Reduced from 52px
+    fontSize: "40px",
     fontWeight: "800",
     lineHeight: "1.2",
     color: "#5b21b6",
@@ -157,7 +154,7 @@ const styles = {
   },
 
   text: {
-    fontSize: "16px",          // Reduced from 18px
+    fontSize: "16px",
     lineHeight: "1.6",
     color: "#4b5563",
     marginBottom: "24px",
@@ -168,7 +165,7 @@ const styles = {
     color: "#fff",
     border: "none",
     borderRadius: "999px",
-    padding: "12px 28px",      // Reduced padding
+    padding: "12px 28px",
     fontSize: "15px",
     fontWeight: "600",
     cursor: "pointer",
@@ -179,7 +176,7 @@ const styles = {
     display: "flex",
     gap: "14px",
     flexWrap: "wrap",
-    marginTop: "30px",         // Reduced margin
+    marginTop: "30px",
   },
 
   featureCard: {
@@ -188,16 +185,16 @@ const styles = {
     alignItems: "center",
     gap: "8px",
     background: "#fff",
-    padding: "14px",           // Reduced padding
+    padding: "14px",
     borderRadius: "16px",
     minWidth: "85px",
     boxShadow: "0 6px 15px rgba(0,0,0,0.05)",
     fontWeight: "600",
     color: "#4c1d95",
-    fontSize: "13px",          // Added font size
+    fontSize: "13px",
   },
 
   icon: {
-    fontSize: "24px",          // Reduced from 28px
+    fontSize: "24px",
   },
 };
