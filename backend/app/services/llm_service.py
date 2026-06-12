@@ -69,6 +69,7 @@ Field guidance:
 - deadlines: Only dates by which the user must do something, such as payment deadlines, response deadlines, submission deadlines, proof upload deadlines, or appointment dates. Each deadline item must include both the date and the required action or condition, not just the date alone. Good examples: "Payment must be received by 2026-06-14" or "Upload proof of payment by 2026-06-10 if you paid after 2026-05-20". Do not include dates that only describe when a consequence may start, unless the user must act by that date. Do not treat the letter date as a deadline.
 - required_actions: Actions explicitly requested by the letter. Do not include general advice or preparation steps.
 - required_documents: Documents explicitly requested in the letter.
+- letter_involves_payment: true if the letter mentions any payment, fee, contribution, invoice, or amount the user owes or has paid — even if the exact amount or details are unclear. false if the letter does not involve any payment at all.
 - payment_information: Payment details explicitly mentioned in the letter, such as amount, IBAN, BIC, recipient, or payment reference. Do not repeat payment deadlines here if they are already listed in deadlines.
 - possible_consequences: Only consequences clearly stated in the letter. Do not invent legal or administrative consequences.
 - unclear_or_risky_parts: Include unclear, incomplete, risky, sensitive, or easy-to-misunderstand points explicitly present in the letter text. Also include practical traps that could mislead the user, such as conditions, exceptions, or wording where a deadline, payment, document, required action, or consequence could easily be misunderstood. Do not add generic concerns, assumptions, or possible issues that are not grounded in the letter.
@@ -78,6 +79,7 @@ JSON structure:
 {
   "is_valid_letter": true,
   "message": "",
+  "letter_involves_payment": false,
   "sender": "...",
   "sender_type": "...",
   "urgency_level": "...",

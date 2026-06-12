@@ -13,6 +13,7 @@ from app.schemas.analysis import (
 )
 from app.services.analysis_service import analyze_letter_text
 from app.services.pdf_service import extract_text_from_pdf_bytes
+from app.services.pdf_service import extract_text_from_pdf_bytes, extract_text_from_image_bytes
 from app.services.followup_service import answer_followup_question
 from app.services.llm_service import chat_with_llm_stream, generate_reply_draft
 
@@ -30,6 +31,8 @@ def analyze_letter_or_raise_http_error(letter_text: str) -> Union[AnalyzeTextRes
         ) from error
 
 
+ALLOWED_CONTENT_TYPES = ["application/pdf", "image/jpeg", "image/png"]
+
 @router.post("/analyze-text", response_model=Union[AnalyzeTextResponse, InvalidLetterResponse])
 def analyze_text(request: AnalyzeTextRequest):
     return analyze_letter_or_raise_http_error(request.letter_text)
@@ -37,16 +40,19 @@ def analyze_text(request: AnalyzeTextRequest):
 
 @router.post("/analyze-pdf", response_model=Union[AnalyzeTextResponse, InvalidLetterResponse])
 async def analyze_pdf(file: UploadFile = File(...)):
-    if file.content_type != "application/pdf":
+    if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=400,
-            detail="Only PDF files are supported.",
+            detail="Only PDF, JPEG, or PNG files are supported.",
         )
 
-    pdf_bytes = await file.read()
+    file_bytes = await file.read()
 
     try:
-        extracted_text = extract_text_from_pdf_bytes(pdf_bytes)
+        if file.content_type == "application/pdf":
+            extracted_text = extract_text_from_pdf_bytes(file_bytes)
+        else:
+            extracted_text = extract_text_from_image_bytes(file_bytes)
     except ValueError as error:
         raise HTTPException(
             status_code=400,
@@ -54,7 +60,6 @@ async def analyze_pdf(file: UploadFile = File(...)):
         ) from error
 
     return analyze_letter_or_raise_http_error(extracted_text)
-
 
 @router.post("/follow-up", response_model=FollowUpResponse)
 def follow_up(request: FollowUpRequest):

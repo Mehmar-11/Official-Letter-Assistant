@@ -10,6 +10,10 @@ class AnalyzeTextRequest(BaseModel):
 
 class AnalyzeTextResponse(BaseModel):
     is_valid_letter: bool
+    letter_text: str
+    confidence_level: str
+    confidence_reason: str
+    letter_involves_payment: bool
     sender: str
     sender_type: str
     urgency_level: str

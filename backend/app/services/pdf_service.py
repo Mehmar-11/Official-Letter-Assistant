@@ -1,19 +1,33 @@
+import base64
 from io import BytesIO
 
-import pdfplumber
-import base64
 import fitz  # pymupdf
+import pdfplumber
+
+from app.services.llm_service import extract_text_from_image_with_llm
 
 
 MIN_EXTRACTED_TEXT_LENGTH = 50
+
+
+def extract_text_from_image_bytes(image_bytes: bytes) -> str:
+    """
+    Extract text from an image file (JPEG/PNG) using GPT-4o Vision.
+    """
+    img_base64 = base64.b64encode(image_bytes).decode("utf-8")
+    extracted_text = extract_text_from_image_with_llm(img_base64).strip()
+
+    if not extracted_text:
+        raise ValueError("Could not extract any text from this image.")
+
+    return extracted_text
+
 
 def extract_text_from_scanned_pdf(pdf_bytes: bytes) -> str:
     """
     Extract text from a scanned or image-based PDF using GPT-4o Vision.
     Each page is converted to an image and sent to the LLM.
     """
-    from app.services.llm_service import extract_text_from_image_with_llm
-
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     all_text = []
 
@@ -28,11 +42,10 @@ def extract_text_from_scanned_pdf(pdf_bytes: bytes) -> str:
     doc.close()
 
     if not all_text:
-        raise ValueError(
-            "Could not extract any text from this scanned PDF."
-        )
+        raise ValueError("Could not extract any text from this scanned PDF.")
 
     return "\n\n".join(all_text)
+
 
 def extract_text_from_pdf_bytes(pdf_bytes: bytes) -> str:
     """
