@@ -9,6 +9,7 @@ class AnalyzeTextRequest(BaseModel):
 
 
 class AnalyzeTextResponse(BaseModel):
+    is_valid_letter: bool
     sender: str
     sender_type: str
     urgency_level: str
@@ -49,3 +50,7 @@ class ChatResponse(BaseModel):
     reply: str
     ui_action: Optional[str] = None
     options: Optional[List[str]] = None
+
+class InvalidLetterResponse(BaseModel):
+    is_valid_letter: bool = False
+    message: str

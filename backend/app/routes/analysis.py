@@ -1,8 +1,11 @@
+from typing import Union
+
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app.schemas.analysis import (
     AnalyzeTextRequest,
     AnalyzeTextResponse,
+    InvalidLetterResponse,
     FollowUpRequest,
     FollowUpResponse,
     ChatRequest,
@@ -14,10 +17,10 @@ from app.services.followup_service import answer_followup_question
 from app.services.llm_service import chat_with_llm_stream, generate_reply_draft
 
 
+
 router = APIRouter()
 
-
-def analyze_letter_or_raise_http_error(letter_text: str) -> AnalyzeTextResponse:
+def analyze_letter_or_raise_http_error(letter_text: str) -> Union[AnalyzeTextResponse, InvalidLetterResponse]:
     try:
         return analyze_letter_text(letter_text)
     except ValueError as error:
@@ -27,12 +30,12 @@ def analyze_letter_or_raise_http_error(letter_text: str) -> AnalyzeTextResponse:
         ) from error
 
 
-@router.post("/analyze-text", response_model=AnalyzeTextResponse)
+@router.post("/analyze-text", response_model=Union[AnalyzeTextResponse, InvalidLetterResponse])
 def analyze_text(request: AnalyzeTextRequest):
     return analyze_letter_or_raise_http_error(request.letter_text)
 
 
-@router.post("/analyze-pdf", response_model=AnalyzeTextResponse)
+@router.post("/analyze-pdf", response_model=Union[AnalyzeTextResponse, InvalidLetterResponse])
 async def analyze_pdf(file: UploadFile = File(...)):
     if file.content_type != "application/pdf":
         raise HTTPException(
