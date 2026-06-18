@@ -14,17 +14,16 @@ export default function Dashboard({ onBack }) {
   const [copied, setCopied] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
   const [outputLanguage, setOutputLanguage] = useState("en");
-  const [showPreview, setShowPreview] = useState(false);
   const [sessionLetterCount, setSessionLetterCount] = useState(0);
-  const [searchQuery, setSearchQuery] = useState(""); // ← NEW: Search state
-  const [analyzedLetters, setAnalyzedLetters] = useState([]); // ← NEW: Store analyzed letters
   const [chatMessages, setChatMessages] = useState([
     { role: "assistant", content: "Hey! I've read your letter. Ask me anything — I'll keep it simple. 👋" }
   ]);
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
-  
+  const [replyOptions, setReplyOptions] = useState(null);
+  const [replyIntent, setReplyIntent] = useState(null);
+
   const typewriterRef = useRef(null);
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -39,20 +38,6 @@ export default function Dashboard({ onBack }) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, streamingMessage]);
-
-  const steps = ["📄 Extracting text...", "🤖 AI analyzing...", "📊 Processing data...", "✨ Generating summary..."];
-
-  useEffect(() => {
-    let interval, stepIndex = 0;
-    if (loading) {
-      setLoadingStep(steps[0]);
-      interval = setInterval(() => {
-        stepIndex++;
-        if (stepIndex < steps.length) setLoadingStep(steps[stepIndex]);
-      }, 1200);
-    }
-    return () => clearInterval(interval);
-  }, [loading]);
 
   const startTypewriter = (fullText) => {
     if (typewriterRef.current) clearInterval(typewriterRef.current);
@@ -73,24 +58,26 @@ export default function Dashboard({ onBack }) {
 
   const handleFileSelect = (e) => {
     const f = e.target.files[0];
-    if (f && f.type === "application/pdf") setFile(f);
-    else alert("Please select a valid PDF file");
+    if (f && (f.type === "application/pdf" || f.type.startsWith("image/"))) {
+      setFile(f);
+    } else {
+      alert("Please select a valid PDF or image file");
+    }
   };
 
   const handleDropZoneClick = () => fileInputRef.current?.click();
-
-  // ========== SEARCH FUNCTION ==========
-  const getFilteredLetters = () => {
-    if (!searchQuery.trim()) return analyzedLetters;
-    return analyzedLetters.filter(letter => 
-      letter.sender?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      letter.letter_topic?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      letter.tldr?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      letter.required_actions?.some(a => a.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+  const handleDragOver = (e) => { e.preventDefault(); e.stopPropagation(); };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const f = e.dataTransfer.files[0];
+    if (f && (f.type === "application/pdf" || f.type.startsWith("image/"))) {
+      setFile(f);
+    } else {
+      alert("Please drop a valid PDF or image file");
+    }
   };
 
-  // ========== COPY FUNCTION ==========
   const copyToClipboard = () => {
     if (!result) return;
     
@@ -108,8 +95,9 @@ ${result.tldr || "No summary available"}
 Sender:      ${result.sender || "Unknown"}
 Topic:       ${result.letter_topic || "Official letter"}
 Urgency:     ${result.urgency_level || "Medium"}
+Quality:     ${result.confidence_level || "Medium"}
 
-✅ WHAT YOU NEED TO DO
+✅ WHAT TO DO
 ───────────────────────────────────────────────────────────
 ${(result.required_actions || []).map((action, i) => `${i+1}. ${action}`).join('\n') || "None"}
 
@@ -148,11 +136,9 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ========== FIXED EXPORT TO PDF - Captures ALL sections ==========
   const exportToPDF = async () => {
     if (!result) return;
     
-    // Create a temporary div with all content expanded for PDF
     const pdfContainer = document.createElement('div');
     pdfContainer.style.padding = '20px';
     pdfContainer.style.background = 'white';
@@ -161,8 +147,8 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     pdfContainer.style.color = '#111827';
     
     pdfContainer.innerHTML = `
-      <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #2563eb; padding-bottom: 10px;">
-        <h1 style="color: #2563eb;">German Letter Assistant</h1>
+      <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #7c3aed; padding-bottom: 10px;">
+        <h1 style="color: #7c3aed;">German Letter Assistant</h1>
         <p style="color: #6b7280;">Analysis Report - ${new Date().toLocaleString()}</p>
       </div>
       
@@ -175,10 +161,11 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
         <p><strong>📧 Sender:</strong> ${result.sender || "Unknown"}</p>
         <p><strong>🏷️ Topic:</strong> ${result.letter_topic || "Official letter"}</p>
         <p><strong>⚠️ Urgency:</strong> ${result.urgency_level || "Medium"}</p>
+        <p><strong>📊 Analysis Quality:</strong> ${result.confidence_level || "Medium"}</p>
       </div>
       
       <div style="background: #f8fafc; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-        <h3 style="margin: 0 0 12px 0;">✅ What you need to do</h3>
+        <h3 style="margin: 0 0 12px 0;">✅ What to do</h3>
         ${(result.required_actions || []).map((action, i) => `<p style="margin: 8px 0;">${i+1}. ${action}</p>`).join('') || "<p>None</p>"}
       </div>
       
@@ -239,7 +226,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
 
   const analyzeLetter = async () => {
     if (mode === "text" && !text.trim()) return alert("Please paste your letter text");
-    if (mode === "pdf" && !file) return alert("Please upload a PDF file");
+    if (mode === "pdf" && !file) return alert("Please upload a PDF or image file");
 
     setLoading(true);
     setResult(null);
@@ -266,14 +253,31 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
 
       if (!response.ok) throw new Error("Backend error");
       const data = await response.json();
-      setResult(data);
+      console.log("📥 Analysis response:", data);
       
-      // Store analyzed letter for search
-      setAnalyzedLetters(prev => [...prev, { 
-        id: Date.now(),
-        ...data,
-        timestamp: new Date().toLocaleString()
-      }]);
+      // ✅ Store complete result with ALL required fields for chat
+      setResult({
+        is_valid_letter: data.is_valid_letter !== undefined ? data.is_valid_letter : true,
+        letter_text: data.letter_text || text || "",
+        confidence_level: data.confidence_level || "medium",
+        confidence_reason: data.confidence_reason || "Analysis completed based on the letter content.",
+        letter_involves_payment: data.letter_involves_payment || false,
+        sender: data.sender || "Unknown sender",
+        sender_type: data.sender_type || "Other",
+        urgency_level: data.urgency_level || "Medium",
+        urgency_reason: data.urgency_reason || "Action required based on the letter content.",
+        letter_topic: data.letter_topic || "Official letter",
+        tldr: data.tldr || data.summary || "",
+        useful_details: data.useful_details || [],
+        deadlines: data.deadlines || [],
+        required_actions: data.required_actions || [],
+        required_documents: data.required_documents || [],
+        payment_information: data.payment_information || [],
+        possible_consequences: data.possible_consequences || [],
+        unclear_or_risky_parts: data.unclear_or_risky_parts || [],
+        safety_note: data.safety_note || "This is AI-generated help, not legal advice. Please verify important decisions with the responsible office or a qualified advisor.",
+      });
+      
       setSessionLetterCount(prev => prev + 1);
       startTypewriter(data.tldr || data.summary || "No summary available");
     } catch (err) {
@@ -284,57 +288,121 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     }
   };
 
+  // ========== FIXED CHAT - COMPLETE ANALYSIS OBJECT ==========
   const sendChatMessage = async () => {
     if (!chatInput.trim() || isStreaming) return;
     
     const userMessage = chatInput;
     setChatInput("");
+    
+    const messagesHistory = chatMessages.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    }));
+    messagesHistory.push({ role: "user", content: userMessage });
+    
     setChatMessages(prev => [...prev, { role: "user", content: userMessage }]);
     
     setIsStreaming(true);
     setStreamingMessage("");
     
     try {
+      // ✅ COMPLETE analysis object with ALL required fields
+      const analysisData = {
+        is_valid_letter: result?.is_valid_letter !== undefined ? result.is_valid_letter : true,
+        letter_text: result?.letter_text || text || "",
+        confidence_level: result?.confidence_level || "medium",
+        confidence_reason: result?.confidence_reason || "Analysis completed based on the letter content.",
+        letter_involves_payment: result?.letter_involves_payment || false,
+        sender: result?.sender || "Unknown sender",
+        sender_type: result?.sender_type || "Other",
+        urgency_level: result?.urgency_level || "Medium",
+        urgency_reason: result?.urgency_reason || "Action required based on the letter content.",
+        letter_topic: result?.letter_topic || "Official letter",
+        tldr: result?.tldr || "",
+        useful_details: result?.useful_details || [],
+        deadlines: result?.deadlines || [],
+        required_actions: result?.required_actions || [],
+        required_documents: result?.required_documents || [],
+        payment_information: result?.payment_information || [],
+        possible_consequences: result?.possible_consequences || [],
+        unclear_or_risky_parts: result?.unclear_or_risky_parts || [],
+        safety_note: result?.safety_note || "This is AI-generated help, not legal advice. Please verify important decisions with the responsible office or a qualified advisor.",
+      };
+
+      const requestBody = {
+        letter_text: result?.letter_text || text || "",
+        analysis: analysisData,
+        messages: messagesHistory,
+        reply_intent: replyIntent || null,
+      };
+
+      console.log("📤 Sending to chat:", JSON.stringify(requestBody, null, 2));
+
       const response = await fetch("http://localhost:8000/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMessage,
-          letter_context: result,
-          language: outputLanguage
-        }),
+        body: JSON.stringify(requestBody),
       });
-      
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullResponse = "";
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              if (data.reply) {
-                fullResponse += data.reply;
-                setStreamingMessage(fullResponse);
-              }
-            } catch (e) {
-              fullResponse += line;
-              setStreamingMessage(fullResponse);
+
+      if (!response.ok) {
+        let errorMessage = "";
+        try {
+          const errorData = await response.json();
+          console.error("❌ Backend error details:", errorData);
+          
+          if (errorData.detail) {
+            if (Array.isArray(errorData.detail)) {
+              errorMessage = errorData.detail.map(err => {
+                const field = err.loc?.join('.') || 'unknown';
+                return `${field}: ${err.msg || 'invalid'}`;
+              }).join('; ');
+            } else {
+              errorMessage = errorData.detail;
             }
+          } else {
+            errorMessage = JSON.stringify(errorData);
           }
+        } catch (e) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         }
+        throw new Error(errorMessage);
       }
       
+      const data = await response.json();
+      console.log("✅ Chat response:", data);
+      
       setIsStreaming(false);
-      setChatMessages(prev => [...prev, { role: "assistant", content: fullResponse }]);
+      setReplyIntent(null);
+      setReplyOptions(null);
+      
+      if (data.ui_action === "show_reply_options") {
+        setReplyOptions(data.options);
+        setChatMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: data.reply || "How would you like me to write the reply?",
+          isOptions: true,
+          options: data.options
+        }]);
+      } else if (data.reply) {
+        setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: "assistant", content: "I couldn't generate a response. Please try again." }]);
+      }
+      
     } catch (err) {
-      console.error(err);
-      setChatMessages(prev => [...prev, { role: "assistant", content: "Sorry, something went wrong. Please try again." }]);
+      console.error("❌ Chat error:", err);
+      setIsStreaming(false);
+      
+      let errorMsg = err.message || "Unknown error";
+      if (errorMsg.length > 150) {
+        errorMsg = errorMsg.substring(0, 150) + "...";
+      }
+      
+      setChatMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: `⚠️ ${errorMsg}` 
+      }]);
     } finally {
       setIsStreaming(false);
       setStreamingMessage("");
@@ -346,6 +414,12 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     setTimeout(() => sendChatMessage(), 100);
   };
 
+  const handleReplyOptionClick = (option) => {
+    setReplyIntent(option);
+    setChatInput(option);
+    setTimeout(() => sendChatMessage(), 100);
+  };
+
   const resetAnalysis = () => {
     if (typewriterRef.current) clearInterval(typewriterRef.current);
     setResult(null);
@@ -354,14 +428,26 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     setFile(null);
     setChatMessages([{ role: "assistant", content: "Hey! I've read your letter. Ask me anything — I'll keep it simple. 👋" }]);
     setSessionLetterCount(0);
-    setAnalyzedLetters([]);
-    setSearchQuery("");
+    setReplyOptions(null);
+    setReplyIntent(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const toggleAccordion = (id) => {
     setActiveAccordion(activeAccordion === id ? null : id);
   };
+
+  const getConfidenceDisplay = () => {
+    const level = result?.confidence_level || "medium";
+    const labels = {
+      high: { label: "High", color: "#065f46", bg: "#ecfdf5", border: "#a7f3d0" },
+      medium: { label: "Medium", color: "#92400e", bg: "#fffbeb", border: "#fcd34d" },
+      low: { label: "Low", color: "#991b1b", bg: "#fef2f2", border: "#fca5a5" }
+    };
+    return labels[level.toLowerCase()] || labels.medium;
+  };
+
+  const confidenceInfo = getConfidenceDisplay();
 
   const daysLeft = (() => {
     if (!result?.deadlines?.[0]) return null;
@@ -372,7 +458,13 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     return diff > 0 ? diff : 0;
   })();
 
-  const filteredLetters = getFilteredLetters();
+  const accordionSections = [
+    { id: "whatToDo", icon: "✅", title: "What to do", items: result?.required_actions || [] },
+    { id: "howToPay", icon: "💳", title: "How to pay", items: result?.payment_information || [] },
+    { id: "documents", icon: "📄", title: "Documents you may need", items: result?.required_documents || [] },
+    { id: "consequences", icon: "⚠️", title: "What happens if you ignore this", items: result?.possible_consequences || [] },
+    { id: "careful", icon: "🛡️", title: "Things to be careful about", items: result?.unclear_or_risky_parts || [] }
+  ];
 
   return (
     <div style={styles.page}>
@@ -380,14 +472,29 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       <div style={styles.topbar}>
         <div style={styles.brand}>
           <div style={styles.brandIcon}>📄</div>
-          <div style={styles.brandName}>German <span style={{ color: "#2563eb" }}>Letter Assistant</span></div>
+          <div style={styles.brandName}>German <span style={{ color: "#7c3aed" }}>Letter Assistant</span></div>
         </div>
         <div style={styles.topRight}>
-          <select value={outputLanguage} onChange={(e) => setOutputLanguage(e.target.value)} style={styles.langSel}>
+          <select 
+            value={outputLanguage} 
+            onChange={(e) => setOutputLanguage(e.target.value)} 
+            style={styles.langSel}
+          >
             <option value="en">🇬🇧 English</option>
             <option value="de">🇩🇪 Deutsch</option>
             <option value="tr">🇹🇷 Türkçe</option>
             <option value="ar">🇸🇦 العربية</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="es">🇪🇸 Español</option>
+            <option value="it">🇮🇹 Italiano</option>
+            <option value="pt">🇵🇹 Português</option>
+            <option value="nl">🇳🇱 Nederlands</option>
+            <option value="pl">🇵🇱 Polski</option>
+            <option value="ru">🇷🇺 Русский</option>
+            <option value="ja">🇯🇵 日本語</option>
+            <option value="ko">🇰🇷 한국어</option>
+            <option value="zh">🇨🇳 中文</option>
+            <option value="hi">🇮🇳 हिन्दी</option>
           </select>
           <button style={styles.backBtn} onClick={onBack}>← Back</button>
           <button style={styles.aboutBtn} onClick={() => setShowAbout(true)}>About</button>
@@ -396,126 +503,98 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
 
       {/* Main Grid */}
       <div style={styles.main}>
-        {/* Left Panel */}
+        {/* Left Panel - Sidebar */}
         <div style={styles.leftPanel}>
-          <div style={styles.card}>
-            <div style={styles.cardHd}>
-              <div style={styles.stepBadge}>1</div>
-              <div style={styles.cardTitle}>Your letter</div>
-            </div>
-            
-            <div style={styles.modeToggle}>
-              <button onClick={() => setMode("text")} style={mode === "text" ? {...styles.modeBtn, ...styles.modeBtnActive} : styles.modeBtn}>
-                📄 Paste Text
-              </button>
-              <button onClick={() => setMode("pdf")} style={mode === "pdf" ? {...styles.modeBtn, ...styles.modeBtnActive} : styles.modeBtn}>
-                📑 Upload PDF
-              </button>
-            </div>
-
-            {mode === "text" ? (
-              <textarea
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Paste your official German letter here..."
-                style={styles.fakeTextarea}
-                rows={6}
-              />
-            ) : (
-              <div style={styles.dropZone} onClick={handleDropZoneClick}>
-                <input type="file" ref={fileInputRef} accept="application/pdf" style={{ display: "none" }} onChange={handleFileSelect} />
-                <div style={styles.dropIcon}>📄</div>
-                <div style={styles.dropText}>Click to upload PDF</div>
-                <div style={styles.dropSubtext}>or drag and drop</div>
-                {file && <div style={styles.fileName}>✓ {file.name}</div>}
-              </div>
-            )}
-
-            <button style={styles.btnNew} onClick={analyzeLetter} disabled={loading}>
-              ✨ {loading ? " Analyzing..." : " New Analysis"}
+          <div style={styles.sidebarSection}>
+            <div style={styles.stepBadge}>1</div>
+            <div style={styles.sidebarTitle}>Your letter</div>
+          </div>
+          
+          <div style={styles.modeToggle}>
+            <button onClick={() => setMode("text")} style={mode === "text" ? {...styles.modeBtn, ...styles.modeBtnActive} : styles.modeBtn}>
+              📄 Paste Text
             </button>
-
-            {loading && (
-              <div style={styles.loadingCard}>
-                <div style={styles.spinner}></div>
-                <div style={styles.loadingStep}>{loadingStep}</div>
-              </div>
-            )}
-
-            <div style={styles.previewToggle} onClick={() => setShowPreview(!showPreview)}>
-              <div style={styles.previewLabel}>📄 Letter preview</div>
-              <span>{showPreview ? "▲" : "▼"}</span>
-            </div>
-            
-            {showPreview && (
-              <div style={styles.previewText}>
-                {mode === "text" ? (text.substring(0, 200) + (text.length > 200 ? "..." : "") || "No text pasted yet...") : (file ? file.name : "No PDF selected...")}
-              </div>
-            )}
+            <button onClick={() => setMode("pdf")} style={mode === "pdf" ? {...styles.modeBtn, ...styles.modeBtnActive} : styles.modeBtn}>
+              📑 Upload PDF / Image
+            </button>
           </div>
 
-          {/* Search Section - NOW FUNCTIONAL */}
-          <div style={{ ...styles.card, marginTop: 0 }}>
-            <div style={{ ...styles.cardHd, marginBottom: "10px" }}>
-              <span style={{ fontSize: "15px" }}>🔍</span>
-              <div style={{ ...styles.cardTitle, color: "#6b7280" }}>Search your letters</div>
-            </div>
-            <div style={styles.searchInput}>
-              <span>🔍</span>
+          {mode === "text" ? (
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Paste your official German letter here..."
+              style={styles.textarea}
+              rows={10}
+            />
+          ) : (
+            <div 
+              style={styles.dropZone} 
+              onClick={handleDropZoneClick}
+              onDragOver={handleDragOver}
+              onDrop={handleDrop}
+            >
               <input 
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by sender, topic, action..."
-                style={styles.searchInputField}
+                type="file" 
+                ref={fileInputRef} 
+                accept=".pdf,image/*" 
+                style={{ display: "none" }} 
+                onChange={handleFileSelect} 
               />
+              <div style={styles.dropIcon}>📄</div>
+              <div style={styles.dropText}>Click to upload PDF or image</div>
+              <div style={styles.dropSubtext}>or drag and drop</div>
+              {file && <div style={styles.fileName}>✓ {file.name}</div>}
             </div>
-            
-            {/* Search Results */}
-            {searchQuery && filteredLetters.length > 0 && (
-              <div style={styles.searchResults}>
-                {filteredLetters.map(letter => (
-                  <div key={letter.id} style={styles.searchResultItem}>
-                    <div style={styles.searchResultSender}>📧 {letter.sender}</div>
-                    <div style={styles.searchResultTopic}>🏷️ {letter.letter_topic}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            {searchQuery && filteredLetters.length === 0 && (
-              <div style={styles.searchNoResults}>No matching letters found</div>
-            )}
-            
-            <div style={styles.sessionNote}>
-              {sessionLetterCount} letter{sessionLetterCount !== 1 ? 's' : ''} in this session
+          )}
+
+          <button style={styles.analyzeBtn} onClick={analyzeLetter} disabled={loading}>
+            {loading ? "⏳ Analyzing..." : "✨ Analyze Letter"}
+          </button>
+
+          {loading && (
+            <div style={styles.loadingCard}>
+              <div style={styles.loadingDot}></div>
+              <div style={styles.loadingText}>Processing your letter...</div>
             </div>
+          )}
+
+          <div style={styles.privacyNote}>
+            <span>🔒</span>
+            <span>Your data is private — nothing is stored</span>
+          </div>
+
+          <div style={styles.sessionNote}>
+            {sessionLetterCount} letter{sessionLetterCount !== 1 ? 's' : ''} analyzed
           </div>
         </div>
 
-        {/* Right Panel */}
+        {/* Right Panel - Results */}
         <div style={styles.rightPanel}>
-          <div id="resultsArea" style={styles.resultsArea}>
-            <div style={{ ...styles.cardHd, marginBottom: "8px" }}>
+          <div style={styles.resultsArea}>
+            <div style={styles.stepBadgeRow}>
               <div style={styles.stepBadge}>2</div>
-              <div style={styles.cardTitle}>Analysis Result</div>
+              <div style={styles.stepBadgeLabel}>Analysis Result</div>
             </div>
 
             {!result && !loading && (
               <div style={styles.emptyState}>
-                <div style={{ fontSize: "48px", marginBottom: "12px" }}>📄</div>
-                <div>No letter analyzed yet</div>
-                <div style={{ fontSize: "11px", marginTop: "6px", color: "#9ca3af" }}>Paste or upload a letter to see analysis</div>
+                <div style={styles.emptyIcon}>📄</div>
+                <div style={styles.emptyTitle}>No letter analyzed yet</div>
+                <div style={styles.emptySub}>Paste or upload a letter to see analysis</div>
               </div>
             )}
 
             {loading && !result && (
-              <div><div style={styles.skeletonCard}></div><div style={styles.skeletonCard}></div></div>
+              <div>
+                <div style={styles.skeletonCard}></div>
+                <div style={styles.skeletonCard}></div>
+              </div>
             )}
 
             {result && (
               <>
-                {/* Bottom Line Card */}
+                {/* Bottom Line */}
                 <div style={styles.bottomLineCard}>
                   <div style={styles.blLabel}>✨ Bottom line</div>
                   <div style={styles.blText}>"{animatedSummary || result.tldr}"</div>
@@ -523,137 +602,134 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
 
                 {/* Meta Row */}
                 <div style={styles.metaRow}>
-                  <span>📧 {result.sender || "Unknown sender"}</span>
-                  <span>🏷️ {result.letter_topic || "Official letter"}</span>
-                  <span style={styles.urgencyBadge}>⚠️ {result.urgency_level || "Medium"} urgency</span>
+                  <span style={styles.metaItem}>📧 {result.sender || "Unknown sender"}</span>
+                  <span style={styles.metaItem}>🏷️ {result.letter_topic || "Official letter"}</span>
+                  <span style={styles.urgencyBadge}>● {result.urgency_level || "Medium"} urgency</span>
+                  {result.letter_involves_payment && (
+                    <span style={styles.paymentBadge}>💳 Payment involved</span>
+                  )}
+                  {result.is_valid_letter === false && (
+                    <span style={styles.warningBadge}>⚠️ May not be official</span>
+                  )}
                 </div>
 
-                {/* Deadline Badge */}
+                {/* Deadline Bar */}
                 {daysLeft && (
-                  <div style={styles.deadlineBadge}>
+                  <div style={styles.deadlineBar}>
                     ⏰ {daysLeft} days left to act
                   </div>
                 )}
 
-                {/* Reliability Card */}
-                <div style={styles.reliability}>
-                  <div style={styles.relTitle}>🛡️ {result.confidence_score > 80 ? "Reliable analysis" : "Analysis with caution"}</div>
-                  <div style={styles.relSub}>
-                    {result.confidence_score > 80 ? "Text was clear — all fields extracted successfully." :
-                     result.confidence_score > 50 ? "Some information may be incomplete. Verify key details." :
-                     "Low confidence — please verify all information with the original letter."}
+                {/* Analysis Quality */}
+                <div style={{ ...styles.qualityBar, background: confidenceInfo.bg, border: `1px solid ${confidenceInfo.border}` }}>
+                  <div style={{ ...styles.qualityTitle, color: confidenceInfo.color }}>
+                    ✓ Analysis Quality: {confidenceInfo.label}
+                  </div>
+                  <div style={styles.qualityText}>
+                    {result.confidence_reason || "Analysis completed based on the letter content."}
                   </div>
                 </div>
 
                 {/* Accordions */}
                 <div style={styles.accordionWrap}>
-                  {[
-                    { id: "whatToDo", icon: "✅", title: "What to do", items: result.required_actions },
-                    { id: "payment", icon: "💳", title: "Payment details", items: result.payment_information },
-                    { id: "documents", icon: "📄", title: "Documents needed", items: result.required_documents },
-                    { id: "risks", icon: "⚠️", title: "Risks if ignored", items: result.possible_consequences }
-                  ].map(section => (
-                    <div key={section.id} style={styles.accordionItem}>
-                      <div style={styles.accordionHd} onClick={() => toggleAccordion(section.id)}>
-                        <div style={{ ...styles.accordionTitle, color: activeAccordion === section.id ? "#2563eb" : "#374151" }}>
+                  {accordionSections.map(section => (
+                    section.items && section.items.length > 0 && (
+                      <details 
+                        key={section.id} 
+                        style={styles.accordion}
+                        open={activeAccordion === section.id}
+                        onClick={() => toggleAccordion(section.id)}
+                      >
+                        <summary style={styles.accordionSummary}>
                           {section.icon} {section.title}
-                        </div>
-                        <span>{activeAccordion === section.id ? "▲" : "▼"}</span>
-                      </div>
-                      {activeAccordion === section.id && (
+                        </summary>
                         <div style={styles.accordionBody}>
-                          {(section.items || []).map((item, i) => (
-                            <div key={i} style={styles.accItem}>▶ {item}</div>
+                          {section.items.map((item, i) => (
+                            <div key={i} style={styles.accordionItem}>▶ {item}</div>
                           ))}
                         </div>
-                      )}
-                    </div>
+                      </details>
+                    )
                   ))}
                 </div>
 
-                {/* Things to be careful about */}
-                {result.unclear_or_risky_parts && result.unclear_or_risky_parts.length > 0 && (
-                  <div style={styles.accordionItem}>
-                    <div style={styles.accordionHd} onClick={() => toggleAccordion("careful")}>
-                      <div style={{ ...styles.accordionTitle, color: activeAccordion === "careful" ? "#2563eb" : "#374151" }}>
-                        🛡️ Things to be careful about
-                      </div>
-                      <span>{activeAccordion === "careful" ? "▲" : "▼"}</span>
-                    </div>
-                    {activeAccordion === "careful" && (
-                      <div style={styles.accordionBody}>
-                        {result.unclear_or_risky_parts.map((item, i) => (
-                          <div key={i} style={styles.accItem}>▶ {item}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
                 {/* Additional Details */}
                 {result.useful_details && result.useful_details.length > 0 && (
-                  <div style={styles.additionalDetailsCard}>
-                    <div style={styles.additionalDetailsTitle}>📌 Additional details</div>
-                    <div style={styles.additionalDetailsContent}>
-                      {(result.useful_details || []).map((detail, i) => (
-                        <div key={i}>• {detail}</div>
-                      ))}
-                    </div>
+                  <div style={styles.additionalDetails}>
+                    <div style={styles.additionalTitle}>📌 Additional details</div>
+                    {(result.useful_details || []).map((detail, i) => (
+                      <div key={i} style={styles.additionalItem}>• {detail}</div>
+                    ))}
                   </div>
                 )}
 
-                <div style={styles.safetyCard}>🛡️ {result.safety_note || "This is AI-generated help, not legal advice."}</div>
+                <div style={styles.safetyNote}>
+                  🛡️ {result.safety_note || "This is AI-generated help, not legal advice."}
+                </div>
 
                 {/* Action Buttons */}
-                <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
-                  <button style={styles.iconBtn} onClick={copyToClipboard}>📋 {copied ? "Copied!" : "Copy All"}</button>
-                  <button style={styles.iconBtn} onClick={exportToPDF}>📄 Export PDF</button>
-                  <button style={styles.iconBtn} onClick={resetAnalysis}>🔄 New Analysis</button>
+                <div style={styles.actionRow}>
+                  <button style={styles.actionBtn} onClick={copyToClipboard}>📋 {copied ? "Copied!" : "Copy"}</button>
+                  <button style={styles.actionBtn} onClick={exportToPDF}>📄 PDF</button>
+                  <button style={styles.actionBtn} onClick={resetAnalysis}>🔄 New</button>
+                </div>
+
+                {/* Chat Section */}
+                <div style={styles.chatSection}>
+                  <div style={styles.chatHeader}>
+                    <div style={styles.onlineDot}></div>
+                    <div>
+                      <div style={styles.chatTitle}>💬 Chat with Assistant</div>
+                      <div style={styles.chatSub}>Ask anything about this letter</div>
+                    </div>
+                  </div>
+
+                  <div style={styles.chatMessages}>
+                    {chatMessages.map((msg, idx) => (
+                      <div key={idx} style={{ ...styles.msg, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                        <div style={{ ...styles.bubble, ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble) }}>
+                          {msg.content}
+                          {msg.isOptions && (
+                            <div style={styles.optionButtons}>
+                              {msg.options?.map(opt => (
+                                <button key={opt} style={styles.optionBtn} onClick={() => handleReplyOptionClick(opt)}>
+                                  {opt}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    {isStreaming && streamingMessage && (
+                      <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
+                        <div style={{ ...styles.bubble, ...styles.assistantBubble }}>{streamingMessage}<span style={styles.cursor}>|</span></div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <div style={styles.suggestions}>
+                    {suggestions.map((sug, i) => (
+                      <div key={i} style={styles.sug} onClick={() => handleSuggestionClick(sug)}>{sug}</div>
+                    ))}
+                  </div>
+
+                  <div style={styles.chatInputRow}>
+                    <input 
+                      type="text" 
+                      value={chatInput} 
+                      onChange={(e) => setChatInput(e.target.value)} 
+                      onKeyPress={(e) => e.key === "Enter" && sendChatMessage()} 
+                      placeholder="Ask anything about this letter..." 
+                      style={styles.chatInput} 
+                      disabled={isStreaming}
+                    />
+                    <button style={styles.sendBtn} onClick={sendChatMessage} disabled={isStreaming}>➤</button>
+                  </div>
                 </div>
               </>
             )}
-          </div>
-
-          {/* Chat Section */}
-          <div style={styles.chatSection}>
-            <div style={styles.chatHeader}>
-              <div style={styles.onlineDot}></div>
-              <div>
-                <div style={styles.chatTitle}>💬 Chat with Assistant</div>
-                <div style={styles.chatSub}>Ask anything about this letter</div>
-              </div>
-            </div>
-
-            <div style={styles.chatMessages}>
-              {chatMessages.map((msg, idx) => (
-                <div key={idx} style={{ ...styles.msg, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                  <div style={{ ...styles.bubble, ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble) }}>
-                    {msg.content}
-                  </div>
-                </div>
-              ))}
-              {isStreaming && streamingMessage && (
-                <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
-                  <div style={{ ...styles.bubble, ...styles.assistantBubble }}>{streamingMessage}<span style={styles.cursor}>|</span></div>
-                </div>
-              )}
-              <div ref={chatEndRef} />
-            </div>
-
-            <div style={styles.suggestions}>
-              {suggestions.map((sug, i) => (
-                <div key={i} style={styles.sug} onClick={() => handleSuggestionClick(sug)}>{sug}</div>
-              ))}
-            </div>
-
-            <div style={styles.chatInputRow}>
-              <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyPress={(e) => e.key === "Enter" && sendChatMessage()} placeholder="Ask anything about this letter..." style={styles.chatInput} disabled={isStreaming} />
-              <button style={styles.sendBtn} onClick={sendChatMessage} disabled={isStreaming}>➤</button>
-            </div>
-
-            <div style={styles.privacyRow}>
-              🔒 Nothing is saved — your data disappears when you close this tab.
-            </div>
           </div>
         </div>
       </div>
@@ -675,12 +751,12 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
   );
 }
 
-// ========== STYLES ==========
+// ========== STYLES - PURPLE THEME (Matching Landing Page) ==========
 const styles = {
   page: {
     background: "#f3f6fb",
     minHeight: "100vh",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     color: "#111827",
   },
   topbar: {
@@ -693,7 +769,7 @@ const styles = {
   },
   brand: { display: "flex", alignItems: "center", gap: "10px" },
   brandIcon: { fontSize: "24px" },
-  brandName: { fontSize: "16px", fontWeight: 600, color: "#1e293b" },
+  brandName: { fontSize: "16px", fontWeight: 600, color: "#1e1b4b" },
   topRight: { display: "flex", alignItems: "center", gap: "12px" },
   langSel: {
     background: "white",
@@ -702,6 +778,7 @@ const styles = {
     padding: "5px 12px",
     fontSize: "12px",
     cursor: "pointer",
+    color: "#374151",
   },
   backBtn: {
     border: "1px solid #e5e7eb",
@@ -710,6 +787,7 @@ const styles = {
     borderRadius: "8px",
     cursor: "pointer",
     fontSize: "12px",
+    color: "#374151",
   },
   aboutBtn: {
     border: "1px solid #e5e7eb",
@@ -718,95 +796,485 @@ const styles = {
     borderRadius: "8px",
     cursor: "pointer",
     fontSize: "12px",
+    color: "#374151",
   },
   main: {
     display: "grid",
-    gridTemplateColumns: "300px 1fr",
+    gridTemplateColumns: "320px 1fr",
     minHeight: "calc(100vh - 55px)",
   },
-  leftPanel: { padding: "16px", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", gap: "12px", background: "#fafcff" },
-  rightPanel: { display: "flex", flexDirection: "column" },
-  card: { background: "white", border: "1px solid #e5e7eb", borderRadius: "16px", padding: "16px" },
-  cardHd: { display: "flex", alignItems: "center", gap: "8px", marginBottom: "14px" },
-  stepBadge: {
-    width: "22px", height: "22px", borderRadius: "50%", background: "#2563eb", color: "white",
-    fontSize: "10px", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
+  leftPanel: {
+    padding: "24px",
+    borderRight: "1px solid #e5e7eb",
+    background: "#fafcff",
   },
-  cardTitle: { fontSize: "13px", fontWeight: 600, color: "#1e293b" },
-  modeToggle: { display: "flex", gap: "8px", marginBottom: "12px" },
-  modeBtn: { flex: 1, padding: "8px", borderRadius: "40px", fontSize: "12px", fontWeight: 500, cursor: "pointer", border: "1px solid #e5e7eb", background: "#f8fafc", color: "#6b7280" },
-  modeBtnActive: { background: "#eff6ff", border: "1px solid #2563eb", color: "#2563eb" },
-  fakeTextarea: {
-    width: "100%", minHeight: "140px", border: "1px solid #e5e7eb", borderRadius: "12px",
-    padding: "12px", fontSize: "12px", outline: "none", background: "white", fontFamily: "monospace", resize: "vertical",
+  rightPanel: {
+    background: "#f3f6fb",
+    display: "flex",
+    flexDirection: "column",
+  },
+  sidebarSection: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    marginBottom: "16px",
+  },
+  sidebarTitle: {
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#1e1b4b",
+  },
+  stepBadge: {
+    width: "24px",
+    height: "24px",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+    color: "white",
+    fontSize: "11px",
+    fontWeight: 700,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  stepBadgeRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    marginBottom: "16px",
+  },
+  stepBadgeLabel: {
+    fontSize: "14px",
+    fontWeight: 600,
+    color: "#1e1b4b",
+  },
+  modeToggle: {
+    display: "flex",
+    gap: "8px",
+    marginBottom: "12px",
+  },
+  modeBtn: {
+    flex: 1,
+    padding: "8px",
+    borderRadius: "40px",
+    fontSize: "12px",
+    fontWeight: 500,
+    cursor: "pointer",
+    border: "1px solid #e5e7eb",
+    background: "white",
+    color: "#6b7280",
+  },
+  modeBtnActive: {
+    background: "#ede9fe",
+    border: "1px solid #7c3aed",
+    color: "#7c3aed",
+  },
+  textarea: {
+    width: "100%",
+    minHeight: "180px",
+    border: "1px solid #e5e7eb",
+    borderRadius: "12px",
+    padding: "12px",
+    fontSize: "13px",
+    outline: "none",
+    background: "white",
+    fontFamily: "monospace",
+    resize: "vertical",
+    color: "#111827",
   },
   dropZone: {
-    border: "2px dashed #c7d2fe", borderRadius: "12px", padding: "24px", textAlign: "center",
-    background: "#f8fbff", cursor: "pointer", minHeight: "140px", display: "flex", flexDirection: "column",
-    alignItems: "center", justifyContent: "center", gap: "6px",
+    border: "2px dashed #c7d2fe",
+    borderRadius: "12px",
+    padding: "32px",
+    textAlign: "center",
+    background: "#f8fbff",
+    cursor: "pointer",
+    minHeight: "180px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "6px",
   },
-  dropIcon: { fontSize: "32px" }, dropText: { fontSize: "12px", color: "#4b5563" }, dropSubtext: { fontSize: "10px", color: "#9ca3af" },
-  fileName: { marginTop: "6px", color: "#2563eb", fontSize: "11px", fontWeight: 500 },
-  btnNew: { width: "100%", marginTop: "12px", padding: "10px", borderRadius: "40px", background: "#2563eb", color: "white", border: "none", fontSize: "13px", fontWeight: 600, cursor: "pointer" },
-  loadingCard: { marginTop: "12px", padding: "12px", background: "#f8fafc", borderRadius: "12px", textAlign: "center", border: "1px solid #e5e7eb" },
-  spinner: { width: "20px", height: "20px", border: "2px solid #e5e7eb", borderTop: "2px solid #2563eb", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 8px" },
-  loadingStep: { fontSize: "10px", color: "#2563eb" },
-  previewToggle: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "8px", cursor: "pointer", marginTop: "8px", fontSize: "10px" },
-  previewLabel: { display: "flex", alignItems: "center", gap: "5px", color: "#6b7280" },
-  previewText: { background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "10px", fontSize: "10px", marginTop: "6px", maxHeight: "100px", overflowY: "auto", color: "#6b7280" },
-  searchInput: { display: "flex", gap: "6px", alignItems: "center", background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "8px 10px", marginBottom: "6px" },
-  searchInputField: { flex: 1, border: "none", outline: "none", background: "transparent", fontSize: "11px" },
-  searchResults: { marginTop: "8px", maxHeight: "150px", overflowY: "auto" },
-  searchResultItem: { padding: "8px", borderBottom: "1px solid #e5e7eb", fontSize: "10px" },
-  searchResultSender: { fontWeight: 600, color: "#2563eb" },
-  searchResultTopic: { color: "#6b7280", marginTop: "2px" },
-  searchNoResults: { fontSize: "10px", color: "#9ca3af", textAlign: "center", padding: "12px" },
-  sessionNote: { fontSize: "10px", color: "#9ca3af", marginTop: "6px" },
-  resultsArea: { flex: 1, padding: "16px", display: "flex", flexDirection: "column", gap: "12px", overflowY: "auto", maxHeight: "calc(100vh - 380px)" },
-  emptyState: { textAlign: "center", padding: "48px 20px", color: "#9ca3af", background: "white", borderRadius: "16px", border: "1px solid #e5e7eb" },
-  bottomLineCard: { background: "#fefce8", border: "1px solid #fef08a", borderRadius: "16px", padding: "16px" },
-  blLabel: { fontSize: "10px", color: "#ca8a04", fontWeight: 700, textTransform: "uppercase", marginBottom: "6px" },
-  blText: { fontSize: "15px", fontWeight: 600, lineHeight: 1.4, color: "#1e293b" },
-  metaRow: { display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "11px", color: "#6b7280", alignItems: "center" },
-  urgencyBadge: { display: "inline-flex", alignItems: "center", gap: "4px", color: "#ea580c", fontWeight: 600 },
-  deadlineBadge: { display: "inline-flex", alignItems: "center", gap: "6px", background: "#fef3c7", border: "1px solid #fed7aa", borderRadius: "8px", padding: "5px 12px", fontSize: "11px", color: "#ea580c", fontWeight: 600, width: "fit-content" },
-  reliability: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "10px 14px" },
-  relTitle: { fontSize: "12px", fontWeight: 600, color: "#166534", marginBottom: "3px" },
-  relSub: { fontSize: "10px", color: "#6b7280" },
-  accordionWrap: { display: "flex", flexDirection: "column", gap: "6px" },
-  accordionItem: { border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden" },
-  accordionHd: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", cursor: "pointer", background: "white" },
-  accordionTitle: { fontSize: "12px", fontWeight: 600, display: "flex", alignItems: "center", gap: "7px" },
-  accordionBody: { padding: "10px 14px", background: "#f8fafc", borderTop: "1px solid #e5e7eb" },
-  accItem: { fontSize: "11px", color: "#4b5563", lineHeight: 1.5, marginBottom: "6px" },
-  additionalDetailsCard: { background: "#f3e8ff", borderRadius: "12px", padding: "12px", border: "1px solid #e9d5ff" },
-  additionalDetailsTitle: { fontWeight: 700, fontSize: "11px", marginBottom: "8px", color: "#6b21a5" },
-  additionalDetailsContent: { fontSize: "10px", color: "#4c1d95", lineHeight: 1.5 },
-  safetyCard: { background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "10px", fontSize: "10px", color: "#166534" },
-  iconBtn: { background: "white", border: "1px solid #e5e7eb", borderRadius: "8px", padding: "6px 12px", fontSize: "11px", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" },
-  chatSection: { borderTop: "1px solid #e5e7eb", background: "white" },
-  chatHeader: { padding: "12px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: "10px" },
-  onlineDot: { width: "8px", height: "8px", borderRadius: "50%", background: "#22c55e" },
-  chatTitle: { fontSize: "13px", fontWeight: 600 }, chatSub: { fontSize: "10px", color: "#9ca3af" },
-  chatMessages: { padding: "14px 20px", display: "flex", flexDirection: "column", gap: "8px", maxHeight: "240px", overflowY: "auto", background: "#fafcff" },
+  dropIcon: { fontSize: "32px" },
+  dropText: { fontSize: "13px", color: "#4b5563" },
+  dropSubtext: { fontSize: "11px", color: "#9ca3af" },
+  fileName: { marginTop: "6px", color: "#7c3aed", fontSize: "12px", fontWeight: 500 },
+  analyzeBtn: {
+    width: "100%",
+    marginTop: "12px",
+    padding: "12px",
+    borderRadius: "40px",
+    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+    color: "white",
+    border: "none",
+    fontSize: "14px",
+    fontWeight: 600,
+    cursor: "pointer",
+    boxShadow: "0 10px 20px rgba(124,58,237,0.25)",
+  },
+  loadingCard: {
+    marginTop: "12px",
+    padding: "12px",
+    background: "#f8fafc",
+    borderRadius: "12px",
+    textAlign: "center",
+    border: "1px solid #e5e7eb",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "10px",
+  },
+  loadingDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    background: "#7c3aed",
+    animation: "pulse 1s infinite",
+  },
+  loadingText: { fontSize: "13px", color: "#7c3aed", fontWeight: 500 },
+  privacyNote: {
+    marginTop: "12px",
+    padding: "10px",
+    fontSize: "11px",
+    color: "#6b7280",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    background: "#f8fafc",
+    borderRadius: "8px",
+    border: "1px solid #e5e7eb",
+  },
+  sessionNote: {
+    fontSize: "11px",
+    color: "#9ca3af",
+    textAlign: "center",
+    marginTop: "8px",
+  },
+  resultsArea: {
+    flex: 1,
+    padding: "24px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "14px",
+    overflowY: "auto",
+    maxHeight: "calc(100vh - 55px)",
+  },
+  emptyState: {
+    textAlign: "center",
+    padding: "60px 20px",
+    color: "#9ca3af",
+  },
+  emptyIcon: { fontSize: "48px", marginBottom: "12px" },
+  emptyTitle: { fontSize: "16px", color: "#6b7280", marginBottom: "4px" },
+  emptySub: { fontSize: "13px", color: "#9ca3af" },
+  bottomLineCard: {
+    background: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: "14px",
+    padding: "20px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+  },
+  blLabel: {
+    fontSize: "11px",
+    color: "#7c3aed",
+    fontWeight: 700,
+    letterSpacing: "1.2px",
+    textTransform: "uppercase",
+    marginBottom: "6px",
+  },
+  blText: {
+    fontSize: "16px",
+    fontWeight: 600,
+    lineHeight: 1.5,
+    color: "#1e1b4b",
+  },
+  metaRow: {
+    display: "flex",
+    gap: "16px",
+    flexWrap: "wrap",
+    fontSize: "13px",
+    color: "#6b7280",
+    alignItems: "center",
+    padding: "8px 0",
+  },
+  metaItem: { display: "flex", alignItems: "center", gap: "4px" },
+  urgencyBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "6px",
+    color: "#f87171",
+    fontWeight: 600,
+  },
+  paymentBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    color: "#7c3aed",
+    fontWeight: 600,
+    background: "#ede9fe",
+    padding: "2px 8px",
+    borderRadius: "20px",
+  },
+  warningBadge: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "4px",
+    color: "#dc2626",
+    fontWeight: 600,
+    background: "#fee2e2",
+    padding: "2px 8px",
+    borderRadius: "20px",
+  },
+  deadlineBar: {
+    background: "#fef2f2",
+    border: "1px solid #fca5a5",
+    borderRadius: "10px",
+    padding: "12px 16px",
+    color: "#dc2626",
+    fontWeight: 600,
+    fontSize: "14px",
+  },
+  qualityBar: {
+    borderRadius: "10px",
+    padding: "14px 16px",
+  },
+  qualityTitle: {
+    fontSize: "14px",
+    fontWeight: 600,
+    marginBottom: "4px",
+  },
+  qualityText: {
+    fontSize: "12px",
+    color: "#6b7280",
+  },
+  accordionWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  accordion: {
+    background: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: "10px",
+    padding: "4px 0",
+  },
+  accordionSummary: {
+    padding: "12px 16px",
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: "13px",
+    color: "#4c1d95",
+    listStyle: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+  accordionBody: {
+    padding: "0 16px 12px 16px",
+    borderTop: "1px solid #f1f5f9",
+  },
+  accordionItem: {
+    padding: "6px 0",
+    fontSize: "13px",
+    color: "#4b5563",
+    borderBottom: "1px solid #f1f5f9",
+  },
+  additionalDetails: {
+    background: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: "10px",
+    padding: "14px 16px",
+  },
+  additionalTitle: {
+    fontWeight: 600,
+    fontSize: "13px",
+    color: "#4c1d95",
+    marginBottom: "8px",
+  },
+  additionalItem: {
+    fontSize: "12px",
+    color: "#6b7280",
+    padding: "3px 0",
+  },
+  safetyNote: {
+    background: "#f0fdf4",
+    border: "1px solid #bbf7d0",
+    borderRadius: "10px",
+    padding: "10px 14px",
+    fontSize: "12px",
+    color: "#166534",
+  },
+  actionRow: {
+    display: "flex",
+    gap: "8px",
+    marginTop: "4px",
+  },
+  actionBtn: {
+    background: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: "8px",
+    padding: "6px 14px",
+    fontSize: "12px",
+    cursor: "pointer",
+    color: "#374151",
+  },
+  chatSection: {
+    marginTop: "16px",
+    borderTop: "1px solid #e5e7eb",
+    paddingTop: "12px",
+  },
+  chatHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: "10px",
+    marginBottom: "10px",
+  },
+  onlineDot: {
+    width: "8px",
+    height: "8px",
+    borderRadius: "50%",
+    background: "#22c55e",
+  },
+  chatTitle: { fontSize: "13px", fontWeight: 600, color: "#1e1b4b" },
+  chatSub: { fontSize: "11px", color: "#9ca3af" },
+  chatMessages: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+    maxHeight: "200px",
+    overflowY: "auto",
+    padding: "4px 0",
+  },
   msg: { display: "flex" },
-  bubble: { padding: "8px 12px", borderRadius: "12px", fontSize: "12px", lineHeight: 1.5, maxWidth: "70%" },
-  userBubble: { background: "#2563eb", color: "white", borderBottomRightRadius: "4px" },
-  assistantBubble: { background: "#f1f5f9", color: "#1e293b", borderBottomLeftRadius: "4px" },
-  cursor: { display: "inline-block", width: "2px", height: "12px", background: "#2563eb", marginLeft: "2px", animation: "blink 1s infinite" },
-  suggestions: { padding: "8px 20px", display: "flex", gap: "6px", flexWrap: "wrap", borderTop: "1px solid #e5e7eb", background: "white" },
-  sug: { padding: "4px 10px", borderRadius: "20px", border: "1px solid #e5e7eb", fontSize: "11px", cursor: "pointer", background: "#f8fafc" },
-  chatInputRow: { padding: "10px 20px", borderTop: "1px solid #e5e7eb", display: "flex", gap: "8px", alignItems: "center", background: "white" },
-  chatInput: { flex: 1, background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: "24px", padding: "10px 16px", fontSize: "12px", outline: "none" },
-  sendBtn: { width: "36px", height: "36px", borderRadius: "50%", background: "#2563eb", border: "none", color: "white", cursor: "pointer", fontSize: "16px" },
-  privacyRow: { padding: "8px 20px", borderTop: "1px solid #e5e7eb", fontSize: "10px", color: "#9ca3af", display: "flex", alignItems: "center", gap: "6px", background: "#fafcff" },
-  skeletonCard: { height: "100px", borderRadius: "12px", background: "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)", backgroundSize: "200% 100%", marginBottom: "10px" },
-  modalOverlay: { position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 },
-  modalContent: { background: "white", padding: "24px", borderRadius: "24px", maxWidth: "450px", width: "90%" },
-  modalClose: { marginTop: "16px", padding: "8px 16px", background: "#2563eb", color: "white", border: "none", borderRadius: "40px", cursor: "pointer" },
+  bubble: {
+    padding: "8px 14px",
+    borderRadius: "14px",
+    fontSize: "13px",
+    lineHeight: 1.5,
+    maxWidth: "70%",
+  },
+  userBubble: {
+    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+    color: "white",
+    borderBottomRightRadius: "4px",
+  },
+  assistantBubble: {
+    background: "#f1f5f9",
+    color: "#1e1b4b",
+    borderBottomLeftRadius: "4px",
+  },
+  cursor: {
+    display: "inline-block",
+    width: "2px",
+    height: "14px",
+    background: "#7c3aed",
+    marginLeft: "2px",
+    animation: "blink 1s infinite",
+  },
+  suggestions: {
+    display: "flex",
+    gap: "6px",
+    flexWrap: "wrap",
+    padding: "8px 0",
+  },
+  sug: {
+    padding: "4px 12px",
+    borderRadius: "20px",
+    border: "1px solid #e5e7eb",
+    fontSize: "12px",
+    cursor: "pointer",
+    background: "white",
+    color: "#374151",
+  },
+  chatInputRow: {
+    display: "flex",
+    gap: "8px",
+    alignItems: "center",
+    paddingTop: "8px",
+  },
+  chatInput: {
+    flex: 1,
+    background: "white",
+    border: "1px solid #e5e7eb",
+    borderRadius: "24px",
+    padding: "10px 16px",
+    fontSize: "13px",
+    outline: "none",
+    color: "#111827",
+  },
+  sendBtn: {
+    width: "38px",
+    height: "38px",
+    borderRadius: "50%",
+    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+    border: "none",
+    color: "white",
+    cursor: "pointer",
+    fontSize: "16px",
+  },
+  optionButtons: {
+    display: "flex",
+    gap: "6px",
+    marginTop: "8px",
+    flexWrap: "wrap",
+  },
+  optionBtn: {
+    padding: "4px 12px",
+    borderRadius: "20px",
+    border: "1px solid #7c3aed",
+    background: "#ede9fe",
+    color: "#7c3aed",
+    fontSize: "11px",
+    cursor: "pointer",
+  },
+  skeletonCard: {
+    height: "80px",
+    borderRadius: "12px",
+    background: "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)",
+    backgroundSize: "200% 100%",
+    marginBottom: "10px",
+  },
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: "rgba(0,0,0,0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1000,
+  },
+  modalContent: {
+    background: "white",
+    padding: "24px",
+    borderRadius: "24px",
+    maxWidth: "450px",
+    width: "90%",
+  },
+  modalClose: {
+    marginTop: "16px",
+    padding: "8px 16px",
+    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+    color: "white",
+    border: "none",
+    borderRadius: "40px",
+    cursor: "pointer",
+  },
 };
 
 // Add animations
 const styleSheet = document.createElement("style");
-styleSheet.textContent = `@keyframes spin { to { transform: rotate(360deg); } } @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }`;
+styleSheet.textContent = `
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+`;
 document.head.appendChild(styleSheet);
