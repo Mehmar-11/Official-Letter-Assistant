@@ -23,7 +23,7 @@ def calculate_reliability(llm_result: dict) -> tuple[str, str]:
     if len(letter_text) < 200:
         return "low", "The letter text was too short to analyze reliably."
 
-    if not required_actions:
+    if not required_actions and urgency_level != "Low":
         return "low", "No clear required actions could be found in the letter."
 
     if sender == not_stated and letter_topic == not_stated:
@@ -33,8 +33,19 @@ def calculate_reliability(llm_result: dict) -> tuple[str, str]:
     if sender == not_stated or letter_topic == not_stated:
         return "medium", "The sender or topic of the letter was not clearly identified."
 
-    if letter_involves_payment and not payment_information:
-        return "medium", "This letter involves a payment, but the payment details were not clearly stated."
+    if letter_involves_payment:
+        payment_text = " ".join(payment_information).lower()
+        has_iban = "iban" in payment_text
+        has_recipient = any(
+            w in payment_text
+            for w in ["zahlungsempfänger", "empfänger", "recipient", "gläubiger"]
+        )
+
+        if not payment_information or not has_iban or not has_recipient:
+            return (
+                "medium",
+                "This letter involves a payment, but the payment instructions appear incomplete — IBAN or payment recipient is missing.",
+            )
 
     if urgency_level != "Low" and not deadlines:
         return "medium", "This letter seems to require timely action, but no clear deadline was found."

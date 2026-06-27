@@ -16,7 +16,7 @@ load_dotenv()
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
 
 LETTER_ANALYSIS_PROMPT = """
@@ -63,12 +63,17 @@ Field guidance:
 - sender_type: Use one of: "Public office", "University", "Insurance", "Bank", "Employer", "Other", "Unknown".
 - urgency_level: Use only one of: "High", "Medium", "Low".
 - urgency_reason: A short reason for the urgency level, based only on the letter and the current date. If a deadline is relevant, mention whether it is within 14 days or more than 14 days from the current date. You may mention the approximate number of remaining days if it helps explain the urgency level.
+- urgency_level rules:
+  High: deadline within 14 days OR severe immediate consequence (e.g. benefit suspension, deportation).
+  Medium: deadline exists but more than 14 days away, OR consequence exists but not immediate.
+  Low: no required action, OR letter is purely informational, OR all actions are optional.
+- Optional rights such as Sonderkündigungsrecht, Widerspruchsrecht, or Einspruchsrecht are NOT required actions. They do not affect urgency_level.
+- If the letter explicitly states no action is required (e.g. "Sie müssen nichts unternehmen"), urgency_level must be Low.
 - letter_topic: A short phrase describing the main topic.
 - tldr: One short sentence answering: "What does this letter mean for me?" Focus on the practical bottom line, not a general summary of the letter. Write it like a knowledgeable, careful helper giving the bottom line in simple everyday English. Example: "You need to send the missing documents by June 15 so the office can continue processing your application."
 - useful_details: Short factual details that help the user identify the case or handle the letter, only if they do not belong in a more specific field. Examples: reference numbers, case IDs, student IDs, submission channels, portal names, office departments, appointment locations, semester names, or relevant conditions. Do not include sender name, letter date, deadlines, required actions, required documents, payment amounts, bank details, payment references, payment recipients, consequences, risks, or anything already covered by another field.
 - deadlines: Only dates by which the user must do something, such as payment deadlines, response deadlines, submission deadlines, proof upload deadlines, or appointment dates. Each deadline item must include both the date and the required action or condition, not just the date alone. Good examples: "Payment must be received by 2026-06-14" or "Upload proof of payment by 2026-06-10 if you paid after 2026-05-20". Do not include dates that only describe when a consequence may start, unless the user must act by that date. Do not treat the letter date as a deadline.
-- required_actions: Actions explicitly requested by the letter. Do not include general advice or preparation steps.
-- required_documents: Documents explicitly requested in the letter.
+- required_actions: Actions explicitly required by the letter. Optional rights (Sonderkündigungsrecht, Widerspruch, Einspruch) and informational deadlines are NOT required actions.
 - letter_involves_payment: true if the letter mentions any payment, fee, contribution, invoice, or amount the user owes or has paid — even if the exact amount or details are unclear. false if the letter does not involve any payment at all.
 - payment_information: Payment details explicitly mentioned in the letter, such as amount, IBAN, BIC, recipient, or payment reference. Do not repeat payment deadlines here if they are already listed in deadlines.
 - possible_consequences: Only consequences clearly stated in the letter. Do not invent legal or administrative consequences.
