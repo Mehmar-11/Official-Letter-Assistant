@@ -1,11 +1,13 @@
-from typing import List, Literal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel
-from typing import List, Literal, Optional
+
+from app.schemas.common import OutputLanguage
 
 
 class AnalyzeTextRequest(BaseModel):
     letter_text: str
+    output_language: OutputLanguage = "English"
 
 
 class AnalyzeTextResponse(BaseModel):
@@ -33,6 +35,7 @@ class AnalyzeTextResponse(BaseModel):
 class FollowUpRequest(BaseModel):
     analysis: AnalyzeTextResponse
     question_type: Literal["payment", "documents", "consequences", "careful"]
+    output_language: OutputLanguage = "English"
 
 
 class FollowUpResponse(BaseModel):
@@ -49,6 +52,7 @@ class ChatRequest(BaseModel):
     analysis: AnalyzeTextResponse
     messages: List[ChatMessage]
     reply_intent: Optional[str] = None
+    output_language: OutputLanguage = "English"
 
 class ChatResponse(BaseModel):
     reply: str

@@ -1,3 +1,4 @@
+from app.schemas.common import OutputLanguage
 from typing import Any, Dict
 
 from app.schemas.analysis import (
@@ -43,12 +44,14 @@ def build_focused_context(
 def answer_followup_question(
     analysis: AnalyzeTextResponse,
     question_type: str,
+    output_language: OutputLanguage = "English",
 ) -> FollowUpResponse:
     focused_context = build_focused_context(analysis, question_type)
 
     llm_result = answer_followup_with_llm(
         focused_context=focused_context,
         question_type=question_type,
+        output_language=output_language,
     )
 
     return FollowUpResponse(**llm_result)

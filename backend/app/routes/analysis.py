@@ -1,7 +1,7 @@
 from typing import Union
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
-
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from app.schemas.common import OutputLanguage
 from app.schemas.analysis import (
     AnalyzeTextRequest,
     AnalyzeTextResponse,
@@ -21,9 +21,15 @@ from app.services.llm_service import chat_with_llm_stream, generate_reply_draft
 
 router = APIRouter()
 
-def analyze_letter_or_raise_http_error(letter_text: str) -> Union[AnalyzeTextResponse, InvalidLetterResponse]:
+def analyze_letter_or_raise_http_error(
+    letter_text: str,
+    output_language: OutputLanguage = "English",
+) -> Union[AnalyzeTextResponse, InvalidLetterResponse]:
     try:
-        return analyze_letter_text(letter_text)
+        return analyze_letter_text(
+            letter_text=letter_text,
+            output_language=output_language,
+        )
     except ValueError as error:
         raise HTTPException(
             status_code=502,
@@ -35,11 +41,17 @@ ALLOWED_CONTENT_TYPES = ["application/pdf", "image/jpeg", "image/png"]
 
 @router.post("/analyze-text", response_model=Union[AnalyzeTextResponse, InvalidLetterResponse])
 def analyze_text(request: AnalyzeTextRequest):
-    return analyze_letter_or_raise_http_error(request.letter_text)
+        return analyze_letter_or_raise_http_error(
+        letter_text=request.letter_text,
+        output_language=request.output_language,
+    )
 
 
 @router.post("/analyze-pdf", response_model=Union[AnalyzeTextResponse, InvalidLetterResponse])
-async def analyze_pdf(file: UploadFile = File(...)):
+async def analyze_pdf(
+    file: UploadFile = File(...),
+    output_language: OutputLanguage = Form("English"),
+):
     if file.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=400,
@@ -59,7 +71,10 @@ async def analyze_pdf(file: UploadFile = File(...)):
             detail=str(error),
         ) from error
 
-    return analyze_letter_or_raise_http_error(extracted_text)
+    return analyze_letter_or_raise_http_error(
+        letter_text=extracted_text,
+        output_language=output_language,
+    )
 
 @router.post("/follow-up", response_model=FollowUpResponse)
 def follow_up(request: FollowUpRequest):
@@ -67,6 +82,7 @@ def follow_up(request: FollowUpRequest):
         return answer_followup_question(
             analysis=request.analysis,
             question_type=request.question_type,
+            output_language=request.output_language,
         )
     except ValueError as error:
         raise HTTPException(
@@ -88,6 +104,7 @@ def chat(request: ChatRequest):
             letter_text=request.letter_text,
             analysis=request.analysis.model_dump(),
             messages=request.messages,
+            output_language=request.output_language,
         )
 
         reply = "".join(stream)

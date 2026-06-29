@@ -1,5 +1,6 @@
 import json
 import os
+from app.schemas.common import OutputLanguage
 from datetime import date
 from typing import Any, Dict
 
@@ -22,24 +23,33 @@ OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 LETTER_ANALYSIS_PROMPT = """
 You are an expert assistant for German bureaucratic and administrative letters.
 
-Your job is not to translate or rewrite the letter. Your job is to read the letter, extract only the supported facts, and return a short, practical, structured JSON response in English.
+Your job is not to translate or rewrite the letter. Your job is to read the letter, extract only the supported facts, and return a short, practical, structured JSON response in {{OUTPUT_LANGUAGE}}.
 
 Think in three steps:
 1. First, decide if the provided text is an official German letter — meaning a written communication from a government office, university, insurance company, bank, employer, landlord, court, or similar institution, typically containing a reference number, official sender, and formal tone. Casual messages, chats, personal notes, or unrelated text are NOT official letters, even if written in German.
 2. If it is not an official letter, set is_valid_letter to false and stop — do not extract any other fields.
 3. If it is an official letter, set is_valid_letter to true and extract structured facts, then write the tldr only from those extracted facts.
 
-The user should feel that a knowledgeable, careful helper read the letter and explained what it means for them in simple, everyday English.
+The user should feel that a knowledgeable, careful helper read the letter and explained what it means for them in simple, everyday language.
 
 Current date for urgency calculation:
 {{CURRENT_DATE}}
 
 Rules:
 - First, decide if the provided text is actually an official German letter (e.g. from a government office, university, insurance company, bank, employer, or similar institution). If it is clearly not — for example a receipt, an advertisement, a casual message, random text, or a non-German letter — set is_valid_letter to false.
-- If is_valid_letter is false, set message to a short, friendly English sentence explaining that this doesn't look like an official German letter, and leave all other fields as empty strings, empty lists, or "Not clearly stated in the letter." as appropriate for their type.
+- If is_valid_letter is false, set message to a short, friendly sentence in {{OUTPUT_LANGUAGE}} explaining that this doesn't look like an official German letter, and leave all other fields as empty strings, empty lists, or the equivalent of "Not clearly stated in the letter." in {{OUTPUT_LANGUAGE}} as appropriate for their type.
 - If is_valid_letter is true, set message to an empty string and fill in all other fields normally.
 - Use only the provided letter text. Do not assume, add, or invent information.
-- Return all user-facing content in English.
+- Return all explanatory text in {{OUTPUT_LANGUAGE}}.
+- This includes: message, tldr, urgency_reason, letter_topic, useful_details, deadline descriptions, required_actions, required_documents, possible_consequences, unclear_or_risky_parts, and safety_note.
+- For payment_information, translate explanatory labels such as "Amount", "Recipient", or "Payment reference" into {{OUTPUT_LANGUAGE}}, but keep IBAN, BIC, amounts, recipient names, and payment references exactly unchanged.
+- Do not mix output languages. All explanatory text must be in {{OUTPUT_LANGUAGE}}.
+- Keep JSON keys exactly the same.
+- Do not translate sender names, organization names, reference numbers, case IDs, exact dates, amounts, IBAN, BIC, payment references, legal citations, or German document titles. Keep them exactly as written in the letter.
+- Output language rules:
+  - When the requested output language is Persian, write all user-facing explanatory values in clear, simple Persian, not overly formal Persian.
+  - When the requested output language is English, write all user-facing explanatory values in simple everyday English.
+  - When the requested output language is German, write all user-facing explanatory values in clear simple German, not bureaucratic German.
 - Keep official names, reference numbers, dates, amounts, and document titles unchanged.
 - Use the current date only to calculate urgency. Do not use it to invent or change letter information.
 - Be brief and selective. Each field should contain only what is necessary for the user to understand the letter or act on it.
@@ -47,7 +57,7 @@ Rules:
 - Do not mention the same date, document, payment, or action in multiple fields unless it is necessary for clarity.
 - Keep list fields short. Prefer 1-3 items per list. Only include more if the letter clearly contains several separate required items.
 - If a list field has no clearly supported information, return an empty list.
-- For required string fields with missing information, use: "Not clearly stated in the letter."
+- For required string fields with missing information, write the equivalent of "Not clearly stated in the letter." in {{OUTPUT_LANGUAGE}}.
 - Do not provide legal advice, make decisions for the user, or guarantee outcomes.
 - Return only valid JSON. No explanation. No preamble.
 
@@ -59,18 +69,16 @@ Urgency rules:
 - urgency_reason must briefly explain the urgency_level using only the letter text and the current date.
 
 Field guidance:
-- sender: The sender of the letter. If unclear, use "Not clearly stated in the letter."
+- sender: The sender of the letter. If unclear, use the equivalent of "Not clearly stated in the letter." in {{OUTPUT_LANGUAGE}}.
 - sender_type: Use one of: "Public office", "University", "Insurance", "Bank", "Employer", "Other", "Unknown".
 - urgency_level: Use only one of: "High", "Medium", "Low".
-- urgency_reason: A short reason for the urgency level, based only on the letter and the current date. If a deadline is relevant, mention whether it is within 14 days or more than 14 days from the current date. You may mention the approximate number of remaining days if it helps explain the urgency level.
-- urgency_level rules:
-  High: deadline within 14 days OR severe immediate consequence (e.g. benefit suspension, deportation).
+- urgency_reason: A short reason for the urgency level in {{OUTPUT_LANGUAGE}}, based only on the letter and the current date. If a deadline is relevant, mention whether it is within 14 days or more than 14 days from the current date. You may mention the approximate number of remaining days if it helps explain the urgency level.  High: deadline within 14 days OR severe immediate consequence (e.g. benefit suspension, deportation).
   Medium: deadline exists but more than 14 days away, OR consequence exists but not immediate.
   Low: no required action, OR letter is purely informational, OR all actions are optional.
 - Optional rights such as Sonderkündigungsrecht, Widerspruchsrecht, or Einspruchsrecht are NOT required actions. They do not affect urgency_level.
 - If the letter explicitly states no action is required (e.g. "Sie müssen nichts unternehmen"), urgency_level must be Low.
-- letter_topic: A short phrase describing the main topic.
-- tldr: One short sentence answering: "What does this letter mean for me?" Focus on the practical bottom line, not a general summary of the letter. Write it like a knowledgeable, careful helper giving the bottom line in simple everyday English. Example: "You need to send the missing documents by June 15 so the office can continue processing your application."
+- letter_topic: A short phrase in {{OUTPUT_LANGUAGE}} describing the main topic.
+- tldr: One short sentence answering: "What does this letter mean for me?" Focus on the practical bottom line, not a general summary of the letter. Write it like a knowledgeable, careful helper giving the bottom line in simple everyday language. Example: "You need to send the missing documents by June 15 so the office can continue processing your application."
 - useful_details: Short factual details that help the user identify the case or handle the letter, only if they do not belong in a more specific field. Examples: reference numbers, case IDs, student IDs, submission channels, portal names, office departments, appointment locations, semester names, or relevant conditions. Do not include sender name, letter date, deadlines, required actions, required documents, payment amounts, bank details, payment references, payment recipients, consequences, risks, or anything already covered by another field.
 - deadlines: Only dates by which the user must do something, such as payment deadlines, response deadlines, submission deadlines, proof upload deadlines, or appointment dates. Each deadline item must include both the date and the required action or condition, not just the date alone. Good examples: "Payment must be received by 2026-06-14" or "Upload proof of payment by 2026-06-10 if you paid after 2026-05-20". Do not include dates that only describe when a consequence may start, unless the user must act by that date. Do not treat the letter date as a deadline.
 - required_actions: Actions explicitly required by the letter. Optional rights (Sonderkündigungsrecht, Widerspruch, Einspruch) and informational deadlines are NOT required actions.
@@ -78,8 +86,7 @@ Field guidance:
 - payment_information: Payment details explicitly mentioned in the letter, such as amount, IBAN, BIC, recipient, or payment reference. Do not repeat payment deadlines here if they are already listed in deadlines.
 - possible_consequences: Only consequences clearly stated in the letter. Do not invent legal or administrative consequences.
 - unclear_or_risky_parts: Include unclear, incomplete, risky, sensitive, or easy-to-misunderstand points explicitly present in the letter text. Also include practical traps that could mislead the user, such as conditions, exceptions, or wording where a deadline, payment, document, required action, or consequence could easily be misunderstood. Do not add generic concerns, assumptions, or possible issues that are not grounded in the letter.
-- safety_note: Use exactly this sentence: "This is AI-generated help, not legal advice. Please verify important decisions with the responsible office or a qualified advisor."
-
+- safety_note: Include a short safety note in {{OUTPUT_LANGUAGE}} saying that this is AI-generated help, not legal advice, and the user should verify important decisions with the responsible office or a qualified advisor.
 JSON structure:
 {
   "is_valid_letter": true,
@@ -113,7 +120,10 @@ def check_llm_config() -> bool:
     return bool(OPENAI_API_KEY) and OPENAI_API_KEY != "your_api_key_here"
 
 
-def build_letter_analysis_prompt(letter_text: str) -> str:
+def build_letter_analysis_prompt(
+    letter_text: str,
+    output_language: OutputLanguage = "English",
+) -> str:
     """
     Build the prompt for analyzing a German official letter.
 
@@ -123,10 +133,11 @@ def build_letter_analysis_prompt(letter_text: str) -> str:
     current_date = date.today().isoformat()
 
     return (
-        LETTER_ANALYSIS_PROMPT
-        .replace("{{CURRENT_DATE}}", current_date)
-        .replace("{{LETTER_TEXT}}", letter_text)
-    )
+    LETTER_ANALYSIS_PROMPT
+    .replace("{{CURRENT_DATE}}", current_date)
+    .replace("{{LETTER_TEXT}}", letter_text)
+    .replace("{{OUTPUT_LANGUAGE}}", output_language)
+)
 
 
 def get_analysis_response_schema() -> Dict[str, Any]:
@@ -249,7 +260,10 @@ def call_llm_provider(prompt: str) -> Dict[str, Any]:
     raise RuntimeError(f"Unsupported LLM provider: {LLM_PROVIDER}")
 
 
-def analyze_letter_with_llm(letter_text: str) -> Dict[str, Any]:
+def analyze_letter_with_llm(
+    letter_text: str,
+    output_language: OutputLanguage = "English",
+) -> Dict[str, Any]:
     """
     Analyze a German official letter with an LLM and return a structured result.
 
@@ -259,7 +273,11 @@ def analyze_letter_with_llm(letter_text: str) -> Dict[str, Any]:
     if not check_llm_config():
         return get_mock_letter_analysis()
 
-    prompt = build_letter_analysis_prompt(letter_text)
+    prompt = build_letter_analysis_prompt(
+        letter_text=letter_text,
+        output_language=output_language,
+    )
+
     return call_llm_provider(prompt)
 
 def extract_text_from_image_with_llm(img_base64: str) -> str:
@@ -308,7 +326,11 @@ Do not add extra practical advice that is not supported by the focused context, 
 Do not simplify or change consequence conditions, dates, or triggers; if you mention a consequence, keep the condition and timing exactly as provided in the focused context.
 Do not make dates, amounts, deadlines, or reference numbers vague. Keep them specific when they are provided in the focused context.
 
-Write in simple, natural everyday English, like a careful helper explaining the letter to a non-German speaker. Avoid bureaucratic or database-like wording.
+Write all user-facing explanatory content in {{OUTPUT_LANGUAGE}}.
+Use simple, natural everyday language, like a careful helper explaining the letter to a non-German speaker.
+Avoid bureaucratic or database-like wording.
+Keep official names, exact dates, amounts, reference numbers, IBAN, BIC, and German document titles unchanged.
+Do not mix output languages.
 
 The answer must be practical and action-oriented:
 - summary: one short direct answer to the guided question. Do not include specific amounts, dates, recipients, references, or document names in the summary; put them in details.
@@ -324,7 +346,7 @@ Question type meanings:
 - consequences: explain only the consequences clearly stated in the letter if the user ignores or misses the required action.
 - careful: explain unclear, risky, conditional, or easy-to-miss points from the letter.
 
-If the focused context does not contain enough information to answer clearly, return:
+If the focused context does not contain enough information to answer clearly, return the equivalent of this in {{OUTPUT_LANGUAGE}}:
 {
   "summary": "I cannot answer that clearly from this letter.",
   "details": []
@@ -338,20 +360,25 @@ Focused context:
 
 Return only valid JSON in this format:
 {
-  "summary": "One short direct answer.",
+  "summary": "One short direct answer in {{OUTPUT_LANGUAGE}}.",
   "details": [
-    "Short clear detail"
+    "Short clear detail in {{OUTPUT_LANGUAGE}}"
   ]
 }
 """
 
-def build_followup_prompt(focused_context: Dict[str, Any], question_type: str) -> str:
+def build_followup_prompt(
+    focused_context: Dict[str, Any],
+    question_type: str,
+    output_language: OutputLanguage = "English",
+) -> str:
     context_json = json.dumps(focused_context, indent=2, ensure_ascii=False)
 
     return (
         FOLLOWUP_PROMPT
         .replace("{{ANALYSIS}}", context_json)
         .replace("{{QUESTION_TYPE}}", question_type)
+        .replace("{{OUTPUT_LANGUAGE}}", output_language)
     )
 
 def get_followup_response_schema() -> Dict[str, Any]:
@@ -409,11 +436,16 @@ def get_mock_followup_answer() -> Dict[str, Any]:
 def answer_followup_with_llm(
     focused_context: Dict[str, Any],
     question_type: str,
+    output_language: OutputLanguage = "English",
 ) -> Dict[str, Any]:
     if not check_llm_config():
         return get_mock_followup_answer()
 
-    prompt = build_followup_prompt(focused_context, question_type)
+    prompt = build_followup_prompt(
+        focused_context=focused_context,
+        question_type=question_type,
+        output_language=output_language,
+)
 
     if LLM_PROVIDER == "openai":
         return call_openai_followup_provider(prompt)
@@ -432,7 +464,10 @@ How to talk:
 - If they ask something you can't answer from the letter, say so honestly, like a friend would.
 - Never give legal advice or guarantee outcomes. If it's serious, say "you might want to double-check with the office directly."
 - Keep answers short unless they ask for more detail.
-- Always reply in the same language the user writes in. If they write in Persian, reply in Persian. If Turkish, reply in Turkish. If English, reply in English.
+- Always reply in {{OUTPUT_LANGUAGE}}, regardless of the language the user writes in.
+- Use simple, natural everyday language.
+- Do not mix output languages.
+- Keep official names, exact dates, amounts, reference numbers, IBAN, BIC, and German document titles unchanged.
 
 Reply draft:
 - If the user asks you to write a reply, draft a reply, or respond to the letter, return exactly this token and nothing else: REPLY_DRAFT_REQUESTED
@@ -449,11 +484,13 @@ def build_chat_messages(
     letter_text: str,
     analysis: Dict[str, Any],
     messages: list,
+    output_language: OutputLanguage = "English",
 ) -> list:
     system_content = (
         CHAT_SYSTEM_PROMPT
         .replace("{{LETTER_TEXT}}", letter_text)
         .replace("{{ANALYSIS}}", json.dumps(analysis, indent=2, ensure_ascii=False))
+        .replace("{{OUTPUT_LANGUAGE}}", output_language)
     )
 
     history = [{"role": m.role, "content": m.content} for m in messages]
@@ -485,13 +522,19 @@ def chat_with_llm_stream(
     letter_text: str,
     analysis: Dict[str, Any],
     messages: list,
+    output_language: OutputLanguage = "English",
 ) -> Generator[str, None, None]:
     if not check_llm_config():
         yield "I can see your letter has been analyzed. What would you like to know about it?"
         return
 
     client = OpenAI(api_key=OPENAI_API_KEY)
-    chat_messages = build_chat_messages(letter_text, analysis, messages)
+    chat_messages = build_chat_messages(
+        letter_text=letter_text,
+        analysis=analysis,
+          messages=messages,
+          output_language=output_language,
+)
 
     stream = client.chat.completions.create(
         model=OPENAI_MODEL,
