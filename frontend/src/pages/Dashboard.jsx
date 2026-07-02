@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 
+// ✅ API URL - uses environment variable or falls back to localhost
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export default function Dashboard({ onBack }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
@@ -249,19 +252,21 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     try {
       let response;
       if (mode === "text") {
-        response = await fetch("http://localhost:8000/analyze-text", {
+        // ✅ Using API_URL instead of localhost
+        response = await fetch(`${API_URL}/analyze-text`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
             letter_text: text,
-            output_language: outputLanguage  // ✅ Added
+            output_language: outputLanguage
           }),
         });
       } else {
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("output_language", outputLanguage);  // ✅ Added
-        response = await fetch("http://localhost:8000/analyze-pdf", {
+        formData.append("output_language", outputLanguage);
+        // ✅ Using API_URL instead of localhost
+        response = await fetch(`${API_URL}/analyze-pdf`, {
           method: "POST",
           body: formData,
         });
@@ -297,7 +302,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       startTypewriter(data.tldr || data.summary || "No summary available");
     } catch (err) {
       console.error(err);
-      alert("Backend connection failed. Make sure the server is running on port 8000.");
+      alert("Backend connection failed. Make sure the server is running.");
     } finally {
       setLoading(false);
     }
@@ -421,10 +426,11 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
         analysis: analysisData,
         messages: messagesHistory,
         reply_intent: replyIntent || null,
-        output_language: outputLanguage,  // ✅ Added
+        output_language: outputLanguage,
       };
 
-      const response = await fetch("http://localhost:8000/chat", {
+      // ✅ Using API_URL instead of localhost
+      const response = await fetch(`${API_URL}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
@@ -579,8 +585,9 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     { id: "careful", icon: "🛡️", title: "Things to be careful about", items: result?.unclear_or_risky_parts || [] }
   ];
 
-  // Dynamic styles for dark mode (same as before - truncated for space)
+  // Dynamic styles for dark mode
   const getStyles = () => ({
+    // ... (same styles as before - no changes needed)
     page: {
       background: darkMode ? "#0f172a" : "#f3f6fb",
       minHeight: "100vh",
