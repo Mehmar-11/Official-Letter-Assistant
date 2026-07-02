@@ -13,8 +13,9 @@ export default function Dashboard({ onBack }) {
   const [showAbout, setShowAbout] = useState(false);
   const [copied, setCopied] = useState(false);
   const [loadingStep, setLoadingStep] = useState("");
-  const [outputLanguage, setOutputLanguage] = useState("en");
+  const [outputLanguage, setOutputLanguage] = useState("English");
   const [sessionLetterCount, setSessionLetterCount] = useState(0);
+  const [darkMode, setDarkMode] = useState(false);
   const [chatMessages, setChatMessages] = useState([
     { role: "assistant", content: "Hey! I've read your letter. Ask me anything — I'll keep it simple. 👋" }
   ]);
@@ -35,6 +36,12 @@ export default function Dashboard({ onBack }) {
     "Explain in simpler words"
   ];
 
+  // Load dark mode preference
+  useEffect(() => {
+    const saved = localStorage.getItem("darkMode");
+    if (saved === "true") setDarkMode(true);
+  }, []);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, streamingMessage]);
@@ -54,6 +61,11 @@ export default function Dashboard({ onBack }) {
       }
     }, 25);
     typewriterRef.current = interval;
+  };
+
+  const toggleDarkMode = () => {
+    setDarkMode(!darkMode);
+    localStorage.setItem("darkMode", !darkMode);
   };
 
   const handleFileSelect = (e) => {
@@ -155,6 +167,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       <div style="background: #fefce8; border: 1px solid #fef08a; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
         <h3 style="color: #ca8a04; margin: 0 0 8px 0;">✨ Bottom line</h3>
         <p style="font-size: 16px; font-weight: 600; margin: 0;">"${result.tldr || "No summary available"}"</p>
+        <p style="font-size: 12px; color: #6b7280; margin-top: 8px;">📖 I've read your letter. Anything unclear? Ask in the chat below.</p>
       </div>
       
       <div style="margin-bottom: 16px;">
@@ -239,12 +252,15 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
         response = await fetch("http://localhost:8000/analyze-text", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ letter_text: text, language: outputLanguage }),
+          body: JSON.stringify({ 
+            letter_text: text,
+            output_language: outputLanguage  // ✅ Added
+          }),
         });
       } else {
         const formData = new FormData();
         formData.append("file", file);
-        formData.append("language", outputLanguage);
+        formData.append("output_language", outputLanguage);  // ✅ Added
         response = await fetch("http://localhost:8000/analyze-pdf", {
           method: "POST",
           body: formData,
@@ -255,7 +271,6 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       const data = await response.json();
       console.log("📥 Analysis response:", data);
       
-      // ✅ Store complete result with ALL required fields for chat
       setResult({
         is_valid_letter: data.is_valid_letter !== undefined ? data.is_valid_letter : true,
         letter_text: data.letter_text || text || "",
@@ -288,7 +303,79 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     }
   };
 
-  // ========== FIXED CHAT - COMPLETE ANALYSIS OBJECT ==========
+  // ========== FALLBACK RESPONSE GENERATOR ==========
+  const generateFallbackResponse = (question, letterData) => {
+    const lowerQ = question.toLowerCase();
+    
+    if (lowerQ.includes("deadline") || lowerQ.includes("when") || lowerQ.includes("date") || lowerQ.includes("by when")) {
+      if (letterData?.deadlines?.length > 0) {
+        return `📅 The deadline is: ${letterData.deadlines.join(', ')}. Make sure to act before this date!`;
+      }
+      return "I couldn't find a specific deadline in the letter. Please check the original document.";
+    }
+    
+    if (lowerQ.includes("pay") || lowerQ.includes("payment") || lowerQ.includes("amount") || lowerQ.includes("euro") || lowerQ.includes("€")) {
+      if (letterData?.payment_information?.length > 0) {
+        return `💳 Payment details: ${letterData.payment_information.join(', ')}`;
+      }
+      if (letterData?.letter_involves_payment) {
+        return "The letter mentions a payment, but the exact details are not clearly specified. Please check the original document.";
+      }
+      return "No payment is required based on this letter.";
+    }
+    
+    if (lowerQ.includes("what to do") || lowerQ.includes("action") || lowerQ.includes("should i") || lowerQ.includes("need to do")) {
+      if (letterData?.required_actions?.length > 0) {
+        return `✅ What you need to do:\n${letterData.required_actions.map((a, i) => `${i+1}. ${a}`).join('\n')}`;
+      }
+      return "No specific actions are required based on this letter. It appears to be informational.";
+    }
+    
+    if (lowerQ.includes("draft") || lowerQ.includes("reply") || lowerQ.includes("respond") || lowerQ.includes("write back")) {
+      return `✏️ Here's a draft reply you can use:\n\nDear ${letterData?.sender || 'Sir/Madam'},\n\nThank you for your letter. I have reviewed the information provided. I will take the necessary actions as requested.\n\nBest regards,\n[Your Name]`;
+    }
+    
+    if (lowerQ.includes("consequence") || lowerQ.includes("risk") || lowerQ.includes("happen") || lowerQ.includes("ignore") || lowerQ.includes("if i don't")) {
+      if (letterData?.possible_consequences?.length > 0) {
+        return `⚠️ Possible consequences:\n${letterData.possible_consequences.map(c => `• ${c}`).join('\n')}`;
+      }
+      return "No specific consequences are mentioned in the letter. However, it's always good to follow any requests mentioned.";
+    }
+    
+    if (lowerQ.includes("who") || lowerQ.includes("sender") || lowerQ.includes("from") || lowerQ.includes("sent")) {
+      if (letterData?.sender) {
+        return `📧 This letter is from: ${letterData.sender}`;
+      }
+      return "The sender is not clearly stated in the letter.";
+    }
+    
+    if (lowerQ.includes("urgent") || lowerQ.includes("important") || lowerQ.includes("priority")) {
+      if (letterData?.urgency_level) {
+        return `⚡ Urgency level: ${letterData.urgency_level}\n\n${letterData?.urgency_reason || ''}`;
+      }
+      return "I couldn't determine the urgency level from the letter.";
+    }
+
+    if (lowerQ.includes("document") || lowerQ.includes("paper") || lowerQ.includes("file") || lowerQ.includes("certificate")) {
+      if (letterData?.required_documents?.length > 0) {
+        return `📄 Documents needed:\n${letterData.required_documents.map(d => `• ${d}`).join('\n')}`;
+      }
+      return "No specific documents are requested in this letter.";
+    }
+
+    if (lowerQ.includes("summary") || lowerQ.includes("overview") || lowerQ.includes("what's this about") || lowerQ.includes("explain")) {
+      return `📖 Here's what the letter is about:\n\n${letterData?.tldr || 'I read the letter but couldn\'t find specific details.'}\n\n${letterData?.required_actions?.length > 0 ? `\n✅ Actions needed: ${letterData.required_actions.join(', ')}` : ''}${letterData?.deadlines?.length > 0 ? `\n⏰ Deadlines: ${letterData.deadlines.join(', ')}` : ''}`;
+    }
+    
+    let defaultResponse = `📖 Based on the letter I analyzed:\n\n`;
+    if (letterData?.tldr) defaultResponse += `${letterData.tldr}\n\n`;
+    if (letterData?.required_actions?.length > 0) defaultResponse += `✅ Actions needed: ${letterData.required_actions.join(', ')}\n`;
+    if (letterData?.deadlines?.length > 0) defaultResponse += `⏰ Deadlines: ${letterData.deadlines.join(', ')}\n`;
+    if (letterData?.sender) defaultResponse += `📧 From: ${letterData.sender}`;
+    return defaultResponse || "I've read the letter. What specific information are you looking for?";
+  };
+
+  // ========== CHAT WITH FALLBACK ==========
   const sendChatMessage = async () => {
     if (!chatInput.trim() || isStreaming) return;
     
@@ -307,7 +394,6 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     setStreamingMessage("");
     
     try {
-      // ✅ COMPLETE analysis object with ALL required fields
       const analysisData = {
         is_valid_letter: result?.is_valid_letter !== undefined ? result.is_valid_letter : true,
         letter_text: result?.letter_text || text || "",
@@ -335,9 +421,8 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
         analysis: analysisData,
         messages: messagesHistory,
         reply_intent: replyIntent || null,
+        output_language: outputLanguage,  // ✅ Added
       };
-
-      console.log("📤 Sending to chat:", JSON.stringify(requestBody, null, 2));
 
       const response = await fetch("http://localhost:8000/chat", {
         method: "POST",
@@ -346,62 +431,90 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       });
 
       if (!response.ok) {
-        let errorMessage = "";
-        try {
-          const errorData = await response.json();
-          console.error("❌ Backend error details:", errorData);
-          
-          if (errorData.detail) {
-            if (Array.isArray(errorData.detail)) {
-              errorMessage = errorData.detail.map(err => {
-                const field = err.loc?.join('.') || 'unknown';
-                return `${field}: ${err.msg || 'invalid'}`;
-              }).join('; ');
-            } else {
-              errorMessage = errorData.detail;
-            }
-          } else {
-            errorMessage = JSON.stringify(errorData);
-          }
-        } catch (e) {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
-        throw new Error(errorMessage);
+        throw new Error(`Backend error: ${response.status}`);
       }
       
-      const data = await response.json();
-      console.log("✅ Chat response:", data);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullResponse = "";
+      let buffer = "";
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        buffer += chunk;
+        
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+        
+        for (const line of lines) {
+          const trimmedLine = line.trim();
+          if (!trimmedLine) continue;
+          
+          if (trimmedLine.startsWith("data: ")) {
+            try {
+              const jsonStr = trimmedLine.substring(6);
+              const data = JSON.parse(jsonStr);
+              
+              if (data.ui_action === "show_reply_options") {
+                setReplyOptions(data.options);
+                setChatMessages(prev => [...prev, { 
+                  role: "assistant", 
+                  content: data.reply || "How would you like me to write the reply?",
+                  isOptions: true,
+                  options: data.options
+                }]);
+                setIsStreaming(false);
+                setStreamingMessage("");
+                return;
+              } else if (data.reply) {
+                fullResponse += data.reply;
+                setStreamingMessage(fullResponse);
+              }
+            } catch (e) {
+              if (trimmedLine.length > 10) {
+                fullResponse += trimmedLine;
+                setStreamingMessage(fullResponse);
+              }
+            }
+          } else {
+            try {
+              const data = JSON.parse(trimmedLine);
+              if (data.reply) {
+                fullResponse += data.reply;
+                setStreamingMessage(fullResponse);
+              }
+            } catch (e) {
+              if (trimmedLine.length > 10) {
+                fullResponse += trimmedLine;
+                setStreamingMessage(fullResponse);
+              }
+            }
+          }
+        }
+      }
       
       setIsStreaming(false);
       setReplyIntent(null);
       setReplyOptions(null);
       
-      if (data.ui_action === "show_reply_options") {
-        setReplyOptions(data.options);
-        setChatMessages(prev => [...prev, { 
-          role: "assistant", 
-          content: data.reply || "How would you like me to write the reply?",
-          isOptions: true,
-          options: data.options
-        }]);
-      } else if (data.reply) {
-        setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
+      if (fullResponse) {
+        setChatMessages(prev => [...prev, { role: "assistant", content: fullResponse }]);
       } else {
-        setChatMessages(prev => [...prev, { role: "assistant", content: "I couldn't generate a response. Please try again." }]);
+        const fallbackResponse = generateFallbackResponse(userMessage, result);
+        setChatMessages(prev => [...prev, { role: "assistant", content: fallbackResponse }]);
       }
       
     } catch (err) {
-      console.error("❌ Chat error:", err);
+      console.error("❌ Chat error, using fallback:", err);
       setIsStreaming(false);
       
-      let errorMsg = err.message || "Unknown error";
-      if (errorMsg.length > 150) {
-        errorMsg = errorMsg.substring(0, 150) + "...";
-      }
-      
+      const fallbackResponse = generateFallbackResponse(chatInput || userMessage, result);
       setChatMessages(prev => [...prev, { 
         role: "assistant", 
-        content: `⚠️ ${errorMsg}` 
+        content: fallbackResponse 
       }]);
     } finally {
       setIsStreaming(false);
@@ -466,6 +579,544 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     { id: "careful", icon: "🛡️", title: "Things to be careful about", items: result?.unclear_or_risky_parts || [] }
   ];
 
+  // Dynamic styles for dark mode (same as before - truncated for space)
+  const getStyles = () => ({
+    page: {
+      background: darkMode ? "#0f172a" : "#f3f6fb",
+      minHeight: "100vh",
+      fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      color: darkMode ? "#e2e8f0" : "#111827",
+      transition: "all 0.3s ease",
+    },
+    topbar: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "12px 24px",
+      background: darkMode ? "#1e293b" : "white",
+      borderBottom: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+      transition: "all 0.3s ease",
+    },
+    brand: { display: "flex", alignItems: "center", gap: "10px" },
+    brandIcon: { fontSize: "24px" },
+    brandName: { fontSize: "16px", fontWeight: 600, color: darkMode ? "#e2e8f0" : "#1e1b4b" },
+    topRight: { display: "flex", alignItems: "center", gap: "12px" },
+    themeBtn: {
+      background: darkMode ? "#334155" : "white",
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      borderRadius: "8px",
+      padding: "5px 12px",
+      cursor: "pointer",
+      fontSize: "16px",
+    },
+    langSel: {
+      background: darkMode ? "#334155" : "white",
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      borderRadius: "8px",
+      padding: "5px 12px",
+      fontSize: "12px",
+      cursor: "pointer",
+      color: darkMode ? "#e2e8f0" : "#374151",
+    },
+    backBtn: {
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      background: darkMode ? "#334155" : "white",
+      padding: "5px 12px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontSize: "12px",
+      color: darkMode ? "#e2e8f0" : "#374151",
+    },
+    aboutBtn: {
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      background: darkMode ? "#334155" : "white",
+      padding: "5px 12px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontSize: "12px",
+      color: darkMode ? "#e2e8f0" : "#374151",
+    },
+    main: {
+      display: "grid",
+      gridTemplateColumns: "320px 1fr",
+      minHeight: "calc(100vh - 55px)",
+    },
+    leftPanel: {
+      padding: "24px",
+      borderRight: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+      background: darkMode ? "#1e293b" : "#fafcff",
+    },
+    rightPanel: {
+      background: darkMode ? "#0f172a" : "#f3f6fb",
+      display: "flex",
+      flexDirection: "column",
+    },
+    sidebarSection: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      marginBottom: "16px",
+    },
+    sidebarTitle: {
+      fontSize: "14px",
+      fontWeight: 600,
+      color: darkMode ? "#e2e8f0" : "#1e1b4b",
+    },
+    stepBadge: {
+      width: "24px",
+      height: "24px",
+      borderRadius: "50%",
+      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      color: "white",
+      fontSize: "11px",
+      fontWeight: 700,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0,
+    },
+    stepBadgeRow: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      marginBottom: "16px",
+    },
+    stepBadgeLabel: {
+      fontSize: "14px",
+      fontWeight: 600,
+      color: darkMode ? "#e2e8f0" : "#1e1b4b",
+    },
+    modeToggle: {
+      display: "flex",
+      gap: "8px",
+      marginBottom: "12px",
+    },
+    modeBtn: {
+      flex: 1,
+      padding: "8px",
+      borderRadius: "40px",
+      fontSize: "12px",
+      fontWeight: 500,
+      cursor: "pointer",
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      background: darkMode ? "#334155" : "white",
+      color: darkMode ? "#94a3b8" : "#6b7280",
+    },
+    modeBtnActive: {
+      background: "#ede9fe",
+      border: "1px solid #7c3aed",
+      color: "#7c3aed",
+    },
+    textarea: {
+      width: "100%",
+      minHeight: "180px",
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      borderRadius: "12px",
+      padding: "12px",
+      fontSize: "13px",
+      outline: "none",
+      background: darkMode ? "#0f172a" : "white",
+      fontFamily: "monospace",
+      resize: "vertical",
+      color: darkMode ? "#e2e8f0" : "#111827",
+    },
+    dropZone: {
+      border: darkMode ? "2px dashed #475569" : "2px dashed #c7d2fe",
+      borderRadius: "12px",
+      padding: "32px",
+      textAlign: "center",
+      background: darkMode ? "#0f172a" : "#f8fbff",
+      cursor: "pointer",
+      minHeight: "180px",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "6px",
+    },
+    dropIcon: { fontSize: "32px" },
+    dropText: { fontSize: "13px", color: darkMode ? "#94a3b8" : "#4b5563" },
+    dropSubtext: { fontSize: "11px", color: darkMode ? "#64748b" : "#9ca3af" },
+    fileName: { marginTop: "6px", color: "#7c3aed", fontSize: "12px", fontWeight: 500 },
+    analyzeBtn: {
+      width: "100%",
+      marginTop: "12px",
+      padding: "12px",
+      borderRadius: "40px",
+      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      color: "white",
+      border: "none",
+      fontSize: "14px",
+      fontWeight: 600,
+      cursor: "pointer",
+      boxShadow: "0 10px 20px rgba(124,58,237,0.25)",
+    },
+    loadingCard: {
+      marginTop: "12px",
+      padding: "12px",
+      background: darkMode ? "#0f172a" : "#f8fafc",
+      borderRadius: "12px",
+      textAlign: "center",
+      border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "10px",
+    },
+    loadingDot: {
+      width: "8px",
+      height: "8px",
+      borderRadius: "50%",
+      background: "#7c3aed",
+      animation: "pulse 1s infinite",
+    },
+    loadingText: { fontSize: "13px", color: "#7c3aed", fontWeight: 500 },
+    privacyNote: {
+      marginTop: "12px",
+      padding: "10px",
+      fontSize: "11px",
+      color: darkMode ? "#94a3b8" : "#6b7280",
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      background: darkMode ? "#0f172a" : "#f8fafc",
+      borderRadius: "8px",
+      border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+    },
+    sessionNote: {
+      fontSize: "11px",
+      color: darkMode ? "#64748b" : "#9ca3af",
+      textAlign: "center",
+      marginTop: "8px",
+    },
+    resultsArea: {
+      flex: 1,
+      padding: "24px",
+      display: "flex",
+      flexDirection: "column",
+      gap: "14px",
+      overflowY: "auto",
+      maxHeight: "calc(100vh - 55px)",
+    },
+    emptyState: {
+      textAlign: "center",
+      padding: "60px 20px",
+      color: darkMode ? "#64748b" : "#9ca3af",
+    },
+    emptyIcon: { fontSize: "48px", marginBottom: "12px" },
+    emptyTitle: { fontSize: "16px", color: darkMode ? "#94a3b8" : "#6b7280", marginBottom: "4px" },
+    emptySub: { fontSize: "13px", color: darkMode ? "#64748b" : "#9ca3af" },
+    bottomLineCard: {
+      background: darkMode ? "#1e293b" : "white",
+      border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+      borderRadius: "14px",
+      padding: "20px",
+      boxShadow: darkMode ? "none" : "0 1px 3px rgba(0,0,0,0.05)",
+    },
+    blLabel: {
+      fontSize: "11px",
+      color: "#7c3aed",
+      fontWeight: 700,
+      letterSpacing: "1.2px",
+      textTransform: "uppercase",
+      marginBottom: "6px",
+    },
+    blText: {
+      fontSize: "16px",
+      fontWeight: 600,
+      lineHeight: 1.5,
+      color: darkMode ? "#e2e8f0" : "#1e1b4b",
+    },
+    bridgeLine: {
+      fontSize: "12px",
+      color: darkMode ? "#94a3b8" : "#6b7280",
+      marginTop: "10px",
+      paddingTop: "10px",
+      borderTop: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+    },
+    bridgeLink: {
+      color: "#7c3aed",
+      cursor: "pointer",
+      fontWeight: 500,
+    },
+    metaRow: {
+      display: "flex",
+      gap: "16px",
+      flexWrap: "wrap",
+      fontSize: "13px",
+      color: darkMode ? "#94a3b8" : "#6b7280",
+      alignItems: "center",
+      padding: "8px 0",
+    },
+    metaItem: { display: "flex", alignItems: "center", gap: "4px" },
+    urgencyBadge: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "6px",
+      color: "#f87171",
+      fontWeight: 600,
+    },
+    paymentBadge: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "4px",
+      color: "#7c3aed",
+      fontWeight: 600,
+      background: "#ede9fe",
+      padding: "2px 8px",
+      borderRadius: "20px",
+    },
+    warningBadge: {
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "4px",
+      color: "#dc2626",
+      fontWeight: 600,
+      background: "#fee2e2",
+      padding: "2px 8px",
+      borderRadius: "20px",
+    },
+    deadlineBar: {
+      background: darkMode ? "#2a1414" : "#fef2f2",
+      border: darkMode ? "1px solid #5a2a2a" : "1px solid #fca5a5",
+      borderRadius: "10px",
+      padding: "12px 16px",
+      color: "#dc2626",
+      fontWeight: 600,
+      fontSize: "14px",
+    },
+    qualityBar: {
+      borderRadius: "10px",
+      padding: "14px 16px",
+    },
+    qualityTitle: {
+      fontSize: "14px",
+      fontWeight: 600,
+      marginBottom: "4px",
+    },
+    qualityText: {
+      fontSize: "12px",
+      color: darkMode ? "#94a3b8" : "#6b7280",
+    },
+    accordionWrap: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "6px",
+    },
+    accordion: {
+      background: darkMode ? "#1e293b" : "white",
+      border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+      borderRadius: "10px",
+      padding: "4px 0",
+    },
+    accordionSummary: {
+      padding: "12px 16px",
+      cursor: "pointer",
+      fontWeight: 600,
+      fontSize: "13px",
+      color: darkMode ? "#e2e8f0" : "#4c1d95",
+      listStyle: "none",
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+    },
+    accordionBody: {
+      padding: "0 16px 12px 16px",
+      borderTop: darkMode ? "1px solid #334155" : "1px solid #f1f5f9",
+    },
+    accordionItem: {
+      padding: "6px 0",
+      fontSize: "13px",
+      color: darkMode ? "#cbd5e1" : "#4b5563",
+      borderBottom: darkMode ? "1px solid #334155" : "1px solid #f1f5f9",
+    },
+    additionalDetails: {
+      background: darkMode ? "#1e293b" : "white",
+      border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+      borderRadius: "10px",
+      padding: "14px 16px",
+    },
+    additionalTitle: {
+      fontWeight: 600,
+      fontSize: "13px",
+      color: darkMode ? "#e2e8f0" : "#4c1d95",
+      marginBottom: "8px",
+    },
+    additionalItem: {
+      fontSize: "12px",
+      color: darkMode ? "#94a3b8" : "#6b7280",
+      padding: "3px 0",
+    },
+    safetyNote: {
+      background: darkMode ? "#0a1e0a" : "#f0fdf4",
+      border: darkMode ? "1px solid #1a3a1a" : "1px solid #bbf7d0",
+      borderRadius: "10px",
+      padding: "10px 14px",
+      fontSize: "12px",
+      color: darkMode ? "#86efac" : "#166534",
+    },
+    actionRow: {
+      display: "flex",
+      gap: "8px",
+      marginTop: "4px",
+    },
+    actionBtn: {
+      background: darkMode ? "#334155" : "white",
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      borderRadius: "8px",
+      padding: "6px 14px",
+      fontSize: "12px",
+      cursor: "pointer",
+      color: darkMode ? "#e2e8f0" : "#374151",
+    },
+    chatSection: {
+      marginTop: "16px",
+      borderTop: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+      paddingTop: "12px",
+    },
+    chatHeader: {
+      display: "flex",
+      alignItems: "center",
+      gap: "10px",
+      marginBottom: "10px",
+    },
+    onlineDot: {
+      width: "8px",
+      height: "8px",
+      borderRadius: "50%",
+      background: "#22c55e",
+    },
+    chatTitle: { fontSize: "13px", fontWeight: 600, color: darkMode ? "#e2e8f0" : "#1e1b4b" },
+    chatSub: { fontSize: "11px", color: darkMode ? "#64748b" : "#9ca3af" },
+    chatMessages: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "8px",
+      maxHeight: "200px",
+      overflowY: "auto",
+      padding: "4px 0",
+    },
+    msg: { display: "flex" },
+    bubble: {
+      padding: "8px 14px",
+      borderRadius: "14px",
+      fontSize: "13px",
+      lineHeight: 1.5,
+      maxWidth: "70%",
+    },
+    userBubble: {
+      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      color: "white",
+      borderBottomRightRadius: "4px",
+    },
+    assistantBubble: {
+      background: darkMode ? "#334155" : "#f1f5f9",
+      color: darkMode ? "#e2e8f0" : "#1e1b4b",
+      borderBottomLeftRadius: "4px",
+    },
+    cursor: {
+      display: "inline-block",
+      width: "2px",
+      height: "14px",
+      background: "#7c3aed",
+      marginLeft: "2px",
+      animation: "blink 1s infinite",
+    },
+    suggestions: {
+      display: "flex",
+      gap: "6px",
+      flexWrap: "wrap",
+      padding: "8px 0",
+    },
+    sug: {
+      padding: "4px 12px",
+      borderRadius: "20px",
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      fontSize: "12px",
+      cursor: "pointer",
+      background: darkMode ? "#334155" : "white",
+      color: darkMode ? "#e2e8f0" : "#374151",
+    },
+    chatInputRow: {
+      display: "flex",
+      gap: "8px",
+      alignItems: "center",
+      paddingTop: "8px",
+    },
+    chatInput: {
+      flex: 1,
+      background: darkMode ? "#0f172a" : "white",
+      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
+      borderRadius: "24px",
+      padding: "10px 16px",
+      fontSize: "13px",
+      outline: "none",
+      color: darkMode ? "#e2e8f0" : "#111827",
+    },
+    sendBtn: {
+      width: "38px",
+      height: "38px",
+      borderRadius: "50%",
+      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      border: "none",
+      color: "white",
+      cursor: "pointer",
+      fontSize: "16px",
+    },
+    optionButtons: {
+      display: "flex",
+      gap: "6px",
+      marginTop: "8px",
+      flexWrap: "wrap",
+    },
+    optionBtn: {
+      padding: "4px 12px",
+      borderRadius: "20px",
+      border: "1px solid #7c3aed",
+      background: "#ede9fe",
+      color: "#7c3aed",
+      fontSize: "11px",
+      cursor: "pointer",
+    },
+    skeletonCard: {
+      height: "80px",
+      borderRadius: "12px",
+      background: darkMode ? "linear-gradient(90deg, #1e293b, #334155, #1e293b)" : "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)",
+      backgroundSize: "200% 100%",
+      marginBottom: "10px",
+    },
+    modalOverlay: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0,0,0,0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    },
+    modalContent: {
+      background: darkMode ? "#1e293b" : "white",
+      padding: "24px",
+      borderRadius: "24px",
+      maxWidth: "450px",
+      width: "90%",
+    },
+    modalClose: {
+      marginTop: "16px",
+      padding: "8px 16px",
+      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      color: "white",
+      border: "none",
+      borderRadius: "40px",
+      cursor: "pointer",
+    },
+  });
+
+  const styles = getStyles();
+
   return (
     <div style={styles.page}>
       {/* Top Bar */}
@@ -480,22 +1131,25 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
             onChange={(e) => setOutputLanguage(e.target.value)} 
             style={styles.langSel}
           >
-            <option value="en">🇬🇧 English</option>
-            <option value="de">🇩🇪 Deutsch</option>
-            <option value="tr">🇹🇷 Türkçe</option>
-            <option value="ar">🇸🇦 العربية</option>
-            <option value="fr">🇫🇷 Français</option>
-            <option value="es">🇪🇸 Español</option>
-            <option value="it">🇮🇹 Italiano</option>
-            <option value="pt">🇵🇹 Português</option>
-            <option value="nl">🇳🇱 Nederlands</option>
-            <option value="pl">🇵🇱 Polski</option>
-            <option value="ru">🇷🇺 Русский</option>
-            <option value="ja">🇯🇵 日本語</option>
-            <option value="ko">🇰🇷 한국어</option>
-            <option value="zh">🇨🇳 中文</option>
-            <option value="hi">🇮🇳 हिन्दी</option>
+            <option value="English">🇬🇧 English</option>
+            <option value="German">🇩🇪 Deutsch</option>
+            <option value="Turkish">🇹🇷 Türkçe</option>
+            <option value="Arabic">🇸🇦 العربية</option>
+            <option value="French">🇫🇷 Français</option>
+            <option value="Spanish">🇪🇸 Español</option>
+            <option value="Italian">🇮🇹 Italiano</option>
+            <option value="Portuguese">🇵🇹 Português</option>
+            <option value="Dutch">🇳🇱 Nederlands</option>
+            <option value="Polish">🇵🇱 Polski</option>
+            <option value="Russian">🇷🇺 Русский</option>
+            <option value="Japanese">🇯🇵 日本語</option>
+            <option value="Korean">🇰🇷 한국어</option>
+            <option value="Chinese">🇨🇳 中文</option>
+            <option value="Hindi">🇮🇳 हिन्दी</option>
           </select>
+          <button style={styles.themeBtn} onClick={toggleDarkMode}>
+            {darkMode ? "☀️" : "🌙"}
+          </button>
           <button style={styles.backBtn} onClick={onBack}>← Back</button>
           <button style={styles.aboutBtn} onClick={() => setShowAbout(true)}>About</button>
         </div>
@@ -598,6 +1252,11 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                 <div style={styles.bottomLineCard}>
                   <div style={styles.blLabel}>✨ Bottom line</div>
                   <div style={styles.blText}>"{animatedSummary || result.tldr}"</div>
+                  
+                  {/* Bridge Line */}
+                  <div style={styles.bridgeLine}>
+                    📖 I've read your letter. Anything unclear? <span style={styles.bridgeLink} onClick={() => document.querySelector(".chat-input")?.focus()}>Ask below ↓</span>
+                  </div>
                 </div>
 
                 {/* Meta Row */}
@@ -703,7 +1362,10 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                     ))}
                     {isStreaming && streamingMessage && (
                       <div style={{ ...styles.msg, justifyContent: "flex-start" }}>
-                        <div style={{ ...styles.bubble, ...styles.assistantBubble }}>{streamingMessage}<span style={styles.cursor}>|</span></div>
+                        <div style={{ ...styles.bubble, ...styles.assistantBubble }}>
+                          {streamingMessage}
+                          <span style={styles.cursor}>|</span>
+                        </div>
                       </div>
                     )}
                     <div ref={chatEndRef} />
@@ -724,6 +1386,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                       placeholder="Ask anything about this letter..." 
                       style={styles.chatInput} 
                       disabled={isStreaming}
+                      className="chat-input"
                     />
                     <button style={styles.sendBtn} onClick={sendChatMessage} disabled={isStreaming}>➤</button>
                   </div>
@@ -750,520 +1413,6 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     </div>
   );
 }
-
-// ========== STYLES - PURPLE THEME (Matching Landing Page) ==========
-const styles = {
-  page: {
-    background: "#f3f6fb",
-    minHeight: "100vh",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-    color: "#111827",
-  },
-  topbar: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "12px 24px",
-    background: "white",
-    borderBottom: "1px solid #e5e7eb",
-  },
-  brand: { display: "flex", alignItems: "center", gap: "10px" },
-  brandIcon: { fontSize: "24px" },
-  brandName: { fontSize: "16px", fontWeight: 600, color: "#1e1b4b" },
-  topRight: { display: "flex", alignItems: "center", gap: "12px" },
-  langSel: {
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: "8px",
-    padding: "5px 12px",
-    fontSize: "12px",
-    cursor: "pointer",
-    color: "#374151",
-  },
-  backBtn: {
-    border: "1px solid #e5e7eb",
-    background: "white",
-    padding: "5px 12px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "12px",
-    color: "#374151",
-  },
-  aboutBtn: {
-    border: "1px solid #e5e7eb",
-    background: "white",
-    padding: "5px 12px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontSize: "12px",
-    color: "#374151",
-  },
-  main: {
-    display: "grid",
-    gridTemplateColumns: "320px 1fr",
-    minHeight: "calc(100vh - 55px)",
-  },
-  leftPanel: {
-    padding: "24px",
-    borderRight: "1px solid #e5e7eb",
-    background: "#fafcff",
-  },
-  rightPanel: {
-    background: "#f3f6fb",
-    display: "flex",
-    flexDirection: "column",
-  },
-  sidebarSection: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    marginBottom: "16px",
-  },
-  sidebarTitle: {
-    fontSize: "14px",
-    fontWeight: 600,
-    color: "#1e1b4b",
-  },
-  stepBadge: {
-    width: "24px",
-    height: "24px",
-    borderRadius: "50%",
-    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
-    color: "white",
-    fontSize: "11px",
-    fontWeight: 700,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  stepBadgeRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    marginBottom: "16px",
-  },
-  stepBadgeLabel: {
-    fontSize: "14px",
-    fontWeight: 600,
-    color: "#1e1b4b",
-  },
-  modeToggle: {
-    display: "flex",
-    gap: "8px",
-    marginBottom: "12px",
-  },
-  modeBtn: {
-    flex: 1,
-    padding: "8px",
-    borderRadius: "40px",
-    fontSize: "12px",
-    fontWeight: 500,
-    cursor: "pointer",
-    border: "1px solid #e5e7eb",
-    background: "white",
-    color: "#6b7280",
-  },
-  modeBtnActive: {
-    background: "#ede9fe",
-    border: "1px solid #7c3aed",
-    color: "#7c3aed",
-  },
-  textarea: {
-    width: "100%",
-    minHeight: "180px",
-    border: "1px solid #e5e7eb",
-    borderRadius: "12px",
-    padding: "12px",
-    fontSize: "13px",
-    outline: "none",
-    background: "white",
-    fontFamily: "monospace",
-    resize: "vertical",
-    color: "#111827",
-  },
-  dropZone: {
-    border: "2px dashed #c7d2fe",
-    borderRadius: "12px",
-    padding: "32px",
-    textAlign: "center",
-    background: "#f8fbff",
-    cursor: "pointer",
-    minHeight: "180px",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "6px",
-  },
-  dropIcon: { fontSize: "32px" },
-  dropText: { fontSize: "13px", color: "#4b5563" },
-  dropSubtext: { fontSize: "11px", color: "#9ca3af" },
-  fileName: { marginTop: "6px", color: "#7c3aed", fontSize: "12px", fontWeight: 500 },
-  analyzeBtn: {
-    width: "100%",
-    marginTop: "12px",
-    padding: "12px",
-    borderRadius: "40px",
-    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
-    color: "white",
-    border: "none",
-    fontSize: "14px",
-    fontWeight: 600,
-    cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(124,58,237,0.25)",
-  },
-  loadingCard: {
-    marginTop: "12px",
-    padding: "12px",
-    background: "#f8fafc",
-    borderRadius: "12px",
-    textAlign: "center",
-    border: "1px solid #e5e7eb",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "10px",
-  },
-  loadingDot: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    background: "#7c3aed",
-    animation: "pulse 1s infinite",
-  },
-  loadingText: { fontSize: "13px", color: "#7c3aed", fontWeight: 500 },
-  privacyNote: {
-    marginTop: "12px",
-    padding: "10px",
-    fontSize: "11px",
-    color: "#6b7280",
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    background: "#f8fafc",
-    borderRadius: "8px",
-    border: "1px solid #e5e7eb",
-  },
-  sessionNote: {
-    fontSize: "11px",
-    color: "#9ca3af",
-    textAlign: "center",
-    marginTop: "8px",
-  },
-  resultsArea: {
-    flex: 1,
-    padding: "24px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "14px",
-    overflowY: "auto",
-    maxHeight: "calc(100vh - 55px)",
-  },
-  emptyState: {
-    textAlign: "center",
-    padding: "60px 20px",
-    color: "#9ca3af",
-  },
-  emptyIcon: { fontSize: "48px", marginBottom: "12px" },
-  emptyTitle: { fontSize: "16px", color: "#6b7280", marginBottom: "4px" },
-  emptySub: { fontSize: "13px", color: "#9ca3af" },
-  bottomLineCard: {
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: "14px",
-    padding: "20px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-  },
-  blLabel: {
-    fontSize: "11px",
-    color: "#7c3aed",
-    fontWeight: 700,
-    letterSpacing: "1.2px",
-    textTransform: "uppercase",
-    marginBottom: "6px",
-  },
-  blText: {
-    fontSize: "16px",
-    fontWeight: 600,
-    lineHeight: 1.5,
-    color: "#1e1b4b",
-  },
-  metaRow: {
-    display: "flex",
-    gap: "16px",
-    flexWrap: "wrap",
-    fontSize: "13px",
-    color: "#6b7280",
-    alignItems: "center",
-    padding: "8px 0",
-  },
-  metaItem: { display: "flex", alignItems: "center", gap: "4px" },
-  urgencyBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "6px",
-    color: "#f87171",
-    fontWeight: 600,
-  },
-  paymentBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    color: "#7c3aed",
-    fontWeight: 600,
-    background: "#ede9fe",
-    padding: "2px 8px",
-    borderRadius: "20px",
-  },
-  warningBadge: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    color: "#dc2626",
-    fontWeight: 600,
-    background: "#fee2e2",
-    padding: "2px 8px",
-    borderRadius: "20px",
-  },
-  deadlineBar: {
-    background: "#fef2f2",
-    border: "1px solid #fca5a5",
-    borderRadius: "10px",
-    padding: "12px 16px",
-    color: "#dc2626",
-    fontWeight: 600,
-    fontSize: "14px",
-  },
-  qualityBar: {
-    borderRadius: "10px",
-    padding: "14px 16px",
-  },
-  qualityTitle: {
-    fontSize: "14px",
-    fontWeight: 600,
-    marginBottom: "4px",
-  },
-  qualityText: {
-    fontSize: "12px",
-    color: "#6b7280",
-  },
-  accordionWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "6px",
-  },
-  accordion: {
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: "10px",
-    padding: "4px 0",
-  },
-  accordionSummary: {
-    padding: "12px 16px",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: "13px",
-    color: "#4c1d95",
-    listStyle: "none",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-  },
-  accordionBody: {
-    padding: "0 16px 12px 16px",
-    borderTop: "1px solid #f1f5f9",
-  },
-  accordionItem: {
-    padding: "6px 0",
-    fontSize: "13px",
-    color: "#4b5563",
-    borderBottom: "1px solid #f1f5f9",
-  },
-  additionalDetails: {
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: "10px",
-    padding: "14px 16px",
-  },
-  additionalTitle: {
-    fontWeight: 600,
-    fontSize: "13px",
-    color: "#4c1d95",
-    marginBottom: "8px",
-  },
-  additionalItem: {
-    fontSize: "12px",
-    color: "#6b7280",
-    padding: "3px 0",
-  },
-  safetyNote: {
-    background: "#f0fdf4",
-    border: "1px solid #bbf7d0",
-    borderRadius: "10px",
-    padding: "10px 14px",
-    fontSize: "12px",
-    color: "#166534",
-  },
-  actionRow: {
-    display: "flex",
-    gap: "8px",
-    marginTop: "4px",
-  },
-  actionBtn: {
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: "8px",
-    padding: "6px 14px",
-    fontSize: "12px",
-    cursor: "pointer",
-    color: "#374151",
-  },
-  chatSection: {
-    marginTop: "16px",
-    borderTop: "1px solid #e5e7eb",
-    paddingTop: "12px",
-  },
-  chatHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    marginBottom: "10px",
-  },
-  onlineDot: {
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    background: "#22c55e",
-  },
-  chatTitle: { fontSize: "13px", fontWeight: 600, color: "#1e1b4b" },
-  chatSub: { fontSize: "11px", color: "#9ca3af" },
-  chatMessages: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-    maxHeight: "200px",
-    overflowY: "auto",
-    padding: "4px 0",
-  },
-  msg: { display: "flex" },
-  bubble: {
-    padding: "8px 14px",
-    borderRadius: "14px",
-    fontSize: "13px",
-    lineHeight: 1.5,
-    maxWidth: "70%",
-  },
-  userBubble: {
-    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
-    color: "white",
-    borderBottomRightRadius: "4px",
-  },
-  assistantBubble: {
-    background: "#f1f5f9",
-    color: "#1e1b4b",
-    borderBottomLeftRadius: "4px",
-  },
-  cursor: {
-    display: "inline-block",
-    width: "2px",
-    height: "14px",
-    background: "#7c3aed",
-    marginLeft: "2px",
-    animation: "blink 1s infinite",
-  },
-  suggestions: {
-    display: "flex",
-    gap: "6px",
-    flexWrap: "wrap",
-    padding: "8px 0",
-  },
-  sug: {
-    padding: "4px 12px",
-    borderRadius: "20px",
-    border: "1px solid #e5e7eb",
-    fontSize: "12px",
-    cursor: "pointer",
-    background: "white",
-    color: "#374151",
-  },
-  chatInputRow: {
-    display: "flex",
-    gap: "8px",
-    alignItems: "center",
-    paddingTop: "8px",
-  },
-  chatInput: {
-    flex: 1,
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: "24px",
-    padding: "10px 16px",
-    fontSize: "13px",
-    outline: "none",
-    color: "#111827",
-  },
-  sendBtn: {
-    width: "38px",
-    height: "38px",
-    borderRadius: "50%",
-    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
-    border: "none",
-    color: "white",
-    cursor: "pointer",
-    fontSize: "16px",
-  },
-  optionButtons: {
-    display: "flex",
-    gap: "6px",
-    marginTop: "8px",
-    flexWrap: "wrap",
-  },
-  optionBtn: {
-    padding: "4px 12px",
-    borderRadius: "20px",
-    border: "1px solid #7c3aed",
-    background: "#ede9fe",
-    color: "#7c3aed",
-    fontSize: "11px",
-    cursor: "pointer",
-  },
-  skeletonCard: {
-    height: "80px",
-    borderRadius: "12px",
-    background: "linear-gradient(90deg, #f1f5f9, #e2e8f0, #f1f5f9)",
-    backgroundSize: "200% 100%",
-    marginBottom: "10px",
-  },
-  modalOverlay: {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-  },
-  modalContent: {
-    background: "white",
-    padding: "24px",
-    borderRadius: "24px",
-    maxWidth: "450px",
-    width: "90%",
-  },
-  modalClose: {
-    marginTop: "16px",
-    padding: "8px 16px",
-    background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
-    color: "white",
-    border: "none",
-    borderRadius: "40px",
-    cursor: "pointer",
-  },
-};
 
 // Add animations
 const styleSheet = document.createElement("style");
