@@ -62,3 +62,7 @@ class ChatResponse(BaseModel):
 class InvalidLetterResponse(BaseModel):
     is_valid_letter: bool = False
     message: str
+    
+class TranslateRequest(BaseModel):
+    analysis: AnalyzeTextResponse
+    output_language: OutputLanguage = "English"

@@ -1,6 +1,7 @@
 from typing import Union
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from app.schemas.analysis import TranslateRequest
 from app.schemas.common import OutputLanguage
 from app.schemas.analysis import (
     AnalyzeTextRequest,
@@ -12,14 +13,12 @@ from app.schemas.analysis import (
     ChatResponse,
 )
 from app.services.analysis_service import analyze_letter_text
-from app.services.pdf_service import extract_text_from_pdf_bytes
 from app.services.pdf_service import extract_text_from_pdf_bytes, extract_text_from_image_bytes
 from app.services.followup_service import answer_followup_question
 from app.services.llm_service import chat_with_llm_stream, generate_reply_draft
 
-
-
 router = APIRouter()
+
 
 def analyze_letter_or_raise_http_error(
     letter_text: str,
@@ -39,9 +38,10 @@ def analyze_letter_or_raise_http_error(
 
 ALLOWED_CONTENT_TYPES = ["application/pdf", "image/jpeg", "image/png"]
 
+
 @router.post("/analyze-text", response_model=Union[AnalyzeTextResponse, InvalidLetterResponse])
 def analyze_text(request: AnalyzeTextRequest):
-        return analyze_letter_or_raise_http_error(
+    return analyze_letter_or_raise_http_error(
         letter_text=request.letter_text,
         output_language=request.output_language,
     )
@@ -76,6 +76,7 @@ async def analyze_pdf(
         output_language=output_language,
     )
 
+
 @router.post("/follow-up", response_model=FollowUpResponse)
 def follow_up(request: FollowUpRequest):
     try:
@@ -89,6 +90,7 @@ def follow_up(request: FollowUpRequest):
             status_code=502,
             detail="LLM follow-up response failed backend validation.",
         ) from error
+
 
 @router.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
@@ -126,4 +128,16 @@ def chat(request: ChatRequest):
         raise HTTPException(
             status_code=502,
             detail="Chat request failed.",
+        ) from error
+
+
+@router.post("/translate", response_model=AnalyzeTextResponse)
+def translate(request: TranslateRequest):
+    try:
+        from app.services.translation_service import translate_analysis_response
+        return translate_analysis_response(request.analysis, request.output_language)
+    except Exception as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Translation request failed.",
         ) from error
