@@ -62,19 +62,21 @@ Rules:
 - Return only valid JSON. No explanation. No preamble.
 
 Urgency rules:
-- Use the current date above to decide whether a deadline is within 14 days.
-- High: a serious consequence is clearly stated and the deadline is within 14 days or less.
-- Medium: action is required, but the deadline is more than 14 days away, or no serious consequence is clearly stated.
-- Low: mainly informational, no required action, or no clear deadline.
+- Urgency reflects Required Action + Consequence Severity + Deadline Pressure together.
+- High: action is required AND at least one of these is true:
+  (1) a serious consequence is clearly stated (e.g. legal action, account disruption, immigration/status risk, benefit suspension, exmatriculation)
+  (2) the required action must be completed within 7 days or less
+- Medium: action is required, deadline exists, but no serious immediate consequence.
+- Low: letter is mainly informational, no required action, or only optional actions exist.
 - urgency_reason must briefly explain the urgency_level using only the letter text and the current date.
-
+High: action required + serious consequence OR deadline within 7 days.
+Medium: action required, deadline exists, no serious immediate consequence.
+Low: informational only, no required action, or only optional actions.
 Field guidance:
 - sender: The sender of the letter. If unclear, use the equivalent of "Not clearly stated in the letter." in {{OUTPUT_LANGUAGE}}.
 - sender_type: Use one of: "Public office", "University", "Insurance", "Bank", "Employer", "Other", "Unknown".
 - urgency_level: Use only one of: "High", "Medium", "Low".
-- urgency_reason: A short reason for the urgency level in {{OUTPUT_LANGUAGE}}, based only on the letter and the current date. If a deadline is relevant, mention whether it is within 14 days or more than 14 days from the current date. You may mention the approximate number of remaining days if it helps explain the urgency level.  High: deadline within 14 days OR severe immediate consequence (e.g. benefit suspension, deportation).
-  Medium: deadline exists but more than 14 days away, OR consequence exists but not immediate.
-  Low: no required action, OR letter is purely informational, OR all actions are optional.
+- urgency_reason: A short reason for the urgency level in {{OUTPUT_LANGUAGE}}, based only on the letter and the current date. Explain the urgency using the most important factor: required action, consequence severity, or deadline pressure.
 - Optional rights such as Sonderkündigungsrecht, Widerspruchsrecht, or Einspruchsrecht are NOT required actions. They do not affect urgency_level.
 - If the letter explicitly states no action is required (e.g. "Sie müssen nichts unternehmen"), urgency_level must be Low.
 - letter_topic: A short phrase in {{OUTPUT_LANGUAGE}} describing the main topic.

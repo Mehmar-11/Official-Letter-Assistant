@@ -1,0 +1,279 @@
+{
+  "samples": [
+    {
+      "id": "01_insurance",
+      "file": "sample_letters/demo/vitaplus_mahnung_demo.txt",
+      "input_type": "text",
+      "description": "Health insurance payment reminder with multiple deadlines and conditions",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Insurance",
+        "urgency_level": "High",
+        "letter_involves_payment": true,
+        "confidence_level": "high",
+        "required_actions_empty": false,
+        "deadlines_empty": false,
+        "payment_information_empty": false
+      },
+      "must_contain": {
+        "payment_information": [
+          "89.90",
+          "IBAN"
+        ],
+        "deadlines": [
+          "14.10.2026",
+          "10.10.2026"
+        ],
+        "possible_consequences": [
+          "5.00",
+          "fee"
+        ]
+      }
+    },
+    {
+      "id": "02_immigration",
+      "file": "sample_letters/eval/02_immigration_office.txt",
+      "input_type": "text",
+      "description": "Immigration office requesting missing documents for residence permit renewal",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Public office",
+        "urgency_level": "High",
+        "letter_involves_payment": false,
+        "confidence_level": "high",
+        "required_actions_empty": false,
+        "deadlines_empty": false,
+        "payment_information_empty": true
+      },
+      "must_contain": {
+        "required_documents": [
+          "enrollment",
+          "insurance",
+          "financial"
+        ],
+        "deadlines": [
+          "2026-08-04"
+        ],
+        "useful_details": [
+          "AUB-2026-00847"
+        ]
+      }
+    },
+    {
+      "id": "03_university",
+      "file": "sample_letters/eval/03_university.txt",
+      "input_type": "text",
+      "description": "University semester fee demand with exmatriculation threat",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "University",
+        "urgency_level": "High",
+        "letter_involves_payment": true,
+        "confidence_level": "high",
+        "required_actions_empty": false,
+        "deadlines_empty": false,
+        "payment_information_empty": false
+      },
+      "must_contain": {
+        "payment_information": [
+          "374.50",
+          "IBAN"
+        ],
+        "deadlines": [
+          "2026-08-30"
+        ],
+        "possible_consequences": [
+          "exmatri",
+          "deregistr"
+        ]
+      }
+    },
+    {
+      "id": "04_bank",
+      "file": "sample_letters/eval/04_bank.txt",
+      "input_type": "text",
+      "description": "Bank notice for unauthorized overdraft with two alternative actions",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Bank",
+        "urgency_level": "High",
+        "letter_involves_payment": true,
+        "confidence_level": "medium",
+        "required_actions_empty": false,
+        "deadlines_empty": false,
+        "payment_information_empty": false
+      },
+      "must_contain": {
+        "payment_information": [
+          "347.32",
+          "DE89"
+        ],
+        "deadlines": [
+          "2026-08-25"
+        ],
+        "unclear_or_risky_parts": []
+      }
+    },
+    {
+      "id": "05_finanzamt",
+      "file": "sample_letters/eval/05_finanzamt.txt",
+      "input_type": "text",
+      "description": "Tax office income tax assessment with Einspruch and Saumniszuschlag",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Public office",
+        "urgency_level": "High",
+        "letter_involves_payment": true,
+        "confidence_level": "high",
+        "required_actions_empty": false,
+        "deadlines_empty": false,
+        "payment_information_empty": false
+      },
+      "must_contain": {
+        "payment_information": [
+          "788.09",
+          "IBAN"
+        ],
+        "deadlines": [
+          "2026-08-14",
+          "14.08.2026"
+        ],
+        "unclear_or_risky_parts": [
+          "Einspruch",
+          "payment obligation"
+        ]
+      }
+    },
+    {
+      "id": "06_housing",
+      "file": "sample_letters/eval/06_housing.txt",
+      "input_type": "text",
+      "description": "Landlord utility cost settlement with two independent actions and deadlines",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Other",
+        "urgency_level": "High",
+        "letter_involves_payment": true,
+        "confidence_level": "high",
+        "required_actions_empty": false,
+        "deadlines_empty": false,
+        "payment_information_empty": false
+      },
+      "must_contain": {
+        "payment_information": [
+          "287.60",
+          "IBAN"
+        ],
+        "deadlines": [
+          "2026-09-01",
+          "01.09.2026"
+        ],
+        "required_actions": [
+          "287.60",
+          "01.09.2026"
+        ]
+      }
+    },
+    {
+      "id": "07_informational",
+      "file": "sample_letters/eval/07_informational.txt",
+      "input_type": "text",
+      "description": "Internet provider contract change notice — no required action",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Other",
+        "urgency_level": "Low",
+        "letter_involves_payment": false,
+        "confidence_level": "high",
+        "required_actions_empty": true,
+        "deadlines_empty": false,
+        "payment_information_empty": true
+      },
+      "must_contain": {
+        "useful_details": [
+          "0176-4421-8833",
+          "TEL-2026"
+        ]
+      }
+    },
+    {
+      "id": "08_high_urgency",
+      "file": "sample_letters/eval/08_high_urgency.txt",
+      "input_type": "text",
+      "description": "Jobcenter document request with 4-day deadline and benefit suspension threat",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Public office",
+        "urgency_level": "High",
+        "letter_involves_payment": false,
+        "confidence_level": "high",
+        "required_actions_empty": false,
+        "deadlines_empty": false,
+        "payment_information_empty": true
+      },
+      "must_contain": {
+        "deadlines": [
+          "2026-08-23"
+        ],
+        "possible_consequences": [
+          "suspension",
+          "Suspension",
+          "benefit",
+          "01.09.2026"
+        ],
+        "required_documents": [
+          "rent",
+          "Mietvertrag",
+          "bank statement",
+          "Kontoauszug"
+        ]
+      }
+    },
+    {
+      "id": "09_incomplete_payment",
+      "file": "sample_letters/eval/09_incomplete_payment.txt",
+      "input_type": "text",
+      "description": "Debt collection notice with amount but missing IBAN and payment recipient",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Other",
+        "urgency_level": "High",
+        "letter_involves_payment": true,
+        "confidence_level": "medium",
+        "required_actions_empty": false,
+        "deadlines_empty": false,
+        "payment_information_empty": false
+      },
+      "must_contain": {
+        "payment_information": [
+          "312.80"
+        ],
+        "unclear_or_risky_parts": []
+      }
+    },
+    {
+      "id": "10_vague_notice",
+      "file": "sample_letters/eval/10_vague_notice.txt",
+      "input_type": "text",
+      "description": "Vague administrative notice with no topic, action, or deadline",
+      "expected": {
+        "is_valid_letter": true,
+        "sender_type": "Public office",
+        "urgency_level": "Low",
+        "letter_involves_payment": false,
+        "confidence_level": "high",
+        "required_actions_empty": true,
+        "deadlines_empty": true,
+        "payment_information_empty": true
+      },
+      "must_not_contain": {
+        "required_actions": [
+          "contact",
+          "send",
+          "submit",
+          "upload"
+        ]
+      }
+    }
+  ]
+}
