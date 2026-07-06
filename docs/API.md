@@ -1,6 +1,6 @@
 # API Reference
 
-Letter Assistant exposes four endpoints. All endpoints accept and return JSON. The `/analyze-pdf` endpoint accepts `multipart/form-data`.
+Letter Assistant exposes six endpoints. Most endpoints accept and return JSON. `/analyze-pdf` accepts `multipart/form-data`, and `/health` returns a simple JSON status response.
 
 Base URL (local): `http://localhost:8000`
 
@@ -14,9 +14,12 @@ Analyzes pasted German letter text and returns a validated structured representa
 
 ```json
 {
-  "letter_text": "string"
+  "letter_text": "string",
+  "output_language": "English"
 }
 ```
+
+`output_language` is optional and defaults to `"English"`. Supported values: `English`, `German`, `Turkish`, `Arabic`, `French`, `Spanish`, `Italian`, `Portuguese`, `Dutch`, `Polish`, `Russian`, `Japanese`, `Korean`, `Chinese`, `Hindi`, `Persian`.
 
 ### Response
 
@@ -60,7 +63,7 @@ Analyzes pasted German letter text and returns a validated structured representa
 ```bash
 curl -s -X POST http://localhost:8000/analyze-text \
   -H "Content-Type: application/json" \
-  -d '{"letter_text": "Sehr geehrte Damen und Herren, wir bitten Sie, die fehlenden Unterlagen bis zum 15.06.2026 einzureichen. Aktenzeichen: ABC-12345."}'
+  -d '{"letter_text": "Sehr geehrte Damen und Herren, wir bitten Sie, die fehlenden Unterlagen bis zum 15.06.2026 einzureichen. Aktenzeichen: ABC-12345.", "output_language": "English"}'
 ```
 
 ### Errors
@@ -87,6 +90,7 @@ Analyzes an uploaded PDF or image file. Accepts text-based PDFs, scanned PDFs, a
 | Field | Type | Description |
 |---|---|---|
 | `file` | file | PDF, JPEG, or PNG |
+| `output_language` | string | Optional. One of the supported languages. Defaults to `"English"`. |
 
 ### Response
 
@@ -96,7 +100,8 @@ Same schema as `/analyze-text`.
 
 ```bash
 curl -s -X POST http://localhost:8000/analyze-pdf \
-  -F "file=@letter.pdf"
+  -F "file=@letter.pdf" \
+  -F "output_language=Persian"
 ```
 
 ```bash
@@ -131,7 +136,8 @@ Answers one of four predefined guided questions about an already-analyzed letter
 ```json
 {
   "analysis": { },
-  "question_type": "payment | documents | consequences | careful"
+  "question_type": "payment | documents | consequences | careful",
+  "output_language": "English"
 }
 ```
 
@@ -156,7 +162,8 @@ curl -s -X POST http://localhost:8000/follow-up \
   -H "Content-Type: application/json" \
   -d '{
     "analysis": { ...full analysis object... },
-    "question_type": "payment"
+    "question_type": "payment",
+    "output_language": "English"
   }'
 ```
 
@@ -174,6 +181,8 @@ curl -s -X POST http://localhost:8000/follow-up \
 Handles three interaction modes in a single endpoint: open chat, reply intent selection, and reply draft generation.
 
 The chat endpoint is grounded in the uploaded letter text and validated analysis.
+
+Reply drafts are always generated in formal German, regardless of `output_language`.
 
 ### Interaction Modes
 
@@ -193,7 +202,8 @@ The chat endpoint is grounded in the uploaded letter text and validated analysis
     { "role": "user", "content": "string" },
     { "role": "assistant", "content": "string" }
   ],
-  "reply_intent": "string | null"
+  "reply_intent": "string | null",
+  "output_language": "English"
 }
 ```
 
@@ -203,6 +213,7 @@ The chat endpoint is grounded in the uploaded letter text and validated analysis
 | `analysis` | Full `AnalyzeTextResponse` object |
 | `messages` | Complete conversation history in order |
 | `reply_intent` | One of three intent strings, or `null` for regular chat |
+| `output_language` | Optional. Language for the chat response. Defaults to `"English"`. |
 
 ### Response
 
@@ -271,7 +282,8 @@ curl -s -X POST http://localhost:8000/chat \
     "messages": [
       { "role": "user", "content": "What documents do I need to send?" }
     ],
-    "reply_intent": null
+    "reply_intent": null,
+    "output_language": "English"
   }'
 ```
 
@@ -297,6 +309,71 @@ curl -s -X POST http://localhost:8000/chat \
 
 ---
 
+## POST /translate
+
+Re-translates an existing analysis into a different language without re-analyzing the letter. Use this when the user switches language after the initial analysis.
+
+### Request
+
+```json
+{
+  "analysis": { },
+  "output_language": "Persian"
+}
+```
+
+| Field | Description |
+|---|---|
+| `analysis` | Full `AnalyzeTextResponse` object returned by `/analyze-text` or `/analyze-pdf` |
+| `output_language` | Target language. One of the 16 supported languages. |
+
+### Response
+
+Same schema as `AnalyzeTextResponse`. The following fields are never translated:
+
+- `sender`, `sender_type`, `urgency_level`, `confidence_level`, `letter_text`
+- Dates, amounts, IBAN, BIC, reference numbers, organization names, legal citations
+
+### Example
+
+```bash
+curl -s -X POST http://localhost:8000/translate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "analysis": { ...full analysis object... },
+    "output_language": "Persian"
+  }'
+```
+
+### Errors
+
+| Code | Reason |
+|---|---|
+| 422 | Invalid `output_language` value |
+| 502 | Translation request failed |
+
+---
+
+## GET /health
+
+Returns backend availability status.
+
+### Response
+
+```json
+{
+  "status": "ok"
+}
+```
+
+### Example
+
+```bash
+curl -s http://localhost:8000/health
+```
+
+---
+
 ## Grounding Summary
 
 Chat, follow-up answers, and reply drafts are grounded in:
@@ -314,6 +391,6 @@ No external retrieval, vector database, or external knowledge base is used.
 **Safety note**: Every analysis response includes a fixed safety note:
 `"This is AI-generated help, not legal advice. Please verify important decisions with the responsible office or a qualified advisor."`
 
-**Confidence level**: **Not generated by the LLM.** Calculated using rule-based logic in the backend based on the validated structured output. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full ruleset.
+**Confidence level**: Not generated by the LLM. Calculated using rule-based logic in the backend based on the validated structured output. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full ruleset.
 
-**Multi-language**: The `/chat` endpoint automatically replies in the language the user writes in. No language parameter is needed or accepted.
+**Multi-language**: All user-facing LLM endpoints accept an `output_language` parameter. Supported languages: `English`, `German`, `Turkish`, `Arabic`, `French`, `Spanish`, `Italian`, `Portuguese`, `Dutch`, `Polish`, `Russian`, `Japanese`, `Korean`, `Chinese`, `Hindi`, `Persian`. Defaults to `"English"`. Technical values (sender names, IBAN, amounts, reference numbers, legal citations) are never translated. Use `/translate` to re-translate an existing analysis without re-uploading the letter.
