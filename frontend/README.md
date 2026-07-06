@@ -1,63 +1,89 @@
-Official Letter Assistant (Frontend)
-Overview
+# Frontend — Letter Assistant
 
-This is the frontend application for the Official Letter Assistant project.
+React frontend for the Letter Assistant application. Communicates with the FastAPI backend to analyze German official letters and present results in a structured, multilingual interface.
 
-It is a React-based interface that allows users to input German official letters either by pasting text or uploading PDF files. The input is sent to a backend API for structured analysis using AI.
+---
 
-The system is designed to help users understand complex official German documents by generating simplified explanations in a clear and structured format.
+## Tech Stack
 
-Features
-Input German official letters via text or PDF upload
-Send input data to backend API for processing
-Display structured AI-generated results including:
-Summary of the letter
-Important deadlines
-Required actions
-Unclear or risky sections
-Modern UI with glassmorphism-based design
-Loading and processing animations
-Typewriter effect for displaying AI-generated summary
-Technology Stack
-React (Vite)
-JavaScript (ES6+)
-CSS (custom styling)
-Fetch API for backend communication
-Backend Integration
+- React 19, Vite, JavaScript
+- Custom CSS (no framework)
+- jsPDF + html2canvas (PDF export)
+- pdfjs-dist (PDF preview)
 
-The frontend communicates with the backend using the following endpoint:
+---
 
-POST
-http://localhost:8000/analyze-text
-Request Format
-{
-  "letter_text": "German official letter text here..."
-}
-Response Format
-{
-  "summary": "...",
-  "deadlines": [],
-  "required_actions": [],
-  "unclear_or_risky_parts": []
-}
-Setup Instructions
-Install dependencies
+## Setup
+
+```bash
 npm install
-Start development server
 npm run dev
-Application Access
+# → http://localhost:5173
+```
 
-The application will run at:
+The frontend expects the backend at `http://localhost:8000` by default. To use a different URL, set `VITE_API_URL` in a `.env` file:
 
-http://localhost:5173
-Project Structure
-src/
-├── App.jsx
-├── main.jsx
-├── index.css
-└── assets/
-Current Status
-Frontend user interface completed
-Backend API integration implemented
-PDF upload UI implemented (backend processing pending)
-Full system integration testing completed with mock backend response
+```
+VITE_API_URL=https://your-backend-url
+```
+
+---
+
+## Pages
+
+| Page | Route | Description |
+|---|---|---|
+| Landing Page | `/` | Introduction and entry point |
+| Dashboard | `/dashboard` | Main analysis interface |
+
+---
+
+## Features
+
+**Input**
+- Paste letter text
+- Upload PDF or image (JPEG, PNG)
+- Automatic mode detection
+
+**Analysis display**
+- Animated typewriter summary
+- Accordion sections: urgency, deadlines, required actions, documents, payment, consequences, unclear parts
+- Analysis quality label (confidence level)
+
+**Follow-up**
+- Four guided question cards: payment, documents, consequences, careful
+- Grounded open chat with streaming responses
+- Reply draft with three selectable intents
+
+**Language**
+- Language selector dropdown (16 languages)
+- All analysis fields and chat responses returned in the selected language
+
+**Utilities**
+- Copy analysis to clipboard
+- Export analysis as PDF
+- Dark mode toggle
+- Session letter counter
+
+---
+
+## Backend Communication
+
+All API calls use the base URL from `VITE_API_URL` or `http://localhost:8000`.
+
+| Action | Endpoint |
+|---|---|
+| Analyze text | `POST /analyze-text` |
+| Analyze PDF/image | `POST /analyze-pdf` |
+| Guided follow-up | `POST /follow-up` |
+| Open chat | `POST /chat` |
+| Language switch | `POST /translate` |
+
+Full API reference: [../docs/API.md](../docs/API.md)
+
+---
+
+## Deployment
+
+**Frontend:** `<TO_BE_ADDED>`  
+**Backend:** `<TO_BE_ADDED>`
