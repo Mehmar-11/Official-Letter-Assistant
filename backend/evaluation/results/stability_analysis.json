@@ -1,0 +1,172 @@
+{
+  "01_insurance": {
+    "urgency": [
+      "High",
+      "High",
+      "High",
+      "Medium",
+      "High"
+    ],
+    "confidence": [
+      "high",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "stable": "⚠️ urgency"
+  },
+  "02_immigration": {
+    "urgency": [
+      "High",
+      "High",
+      "High",
+      "High",
+      "High"
+    ],
+    "confidence": [
+      "high",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "stable": "✅"
+  },
+  "03_university": {
+    "urgency": [
+      "High",
+      "High",
+      "High",
+      "High",
+      "High"
+    ],
+    "confidence": [
+      "high",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "stable": "✅"
+  },
+  "04_bank": {
+    "urgency": [
+      "High",
+      "—",
+      "High",
+      "High",
+      "High"
+    ],
+    "confidence": [
+      "high",
+      "—",
+      "medium",
+      "medium",
+      "medium"
+    ],
+    "stable": "⚠️ urgency"
+  },
+  "05_finanzamt": {
+    "urgency": [
+      "High",
+      "High",
+      "High",
+      "High",
+      "High"
+    ],
+    "confidence": [
+      "high",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "stable": "✅"
+  },
+  "06_housing": {
+    "urgency": [
+      "High",
+      "High",
+      "High",
+      "High",
+      "High"
+    ],
+    "confidence": [
+      "high",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "stable": "✅"
+  },
+  "07_informational": {
+    "urgency": [
+      "Low",
+      "Low",
+      "Low",
+      "Low",
+      "Low"
+    ],
+    "confidence": [
+      "high",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "stable": "✅"
+  },
+  "08_high_urgency": {
+    "urgency": [
+      "High",
+      "High",
+      "High",
+      "High",
+      "High"
+    ],
+    "confidence": [
+      "high",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "stable": "✅"
+  },
+  "09_incomplete_payment": {
+    "urgency": [
+      "High",
+      "High",
+      "High",
+      "High",
+      "High"
+    ],
+    "confidence": [
+      "medium",
+      "medium",
+      "medium",
+      "medium",
+      "medium"
+    ],
+    "stable": "✅"
+  },
+  "10_vague_notice": {
+    "urgency": [
+      "Low",
+      "Low",
+      "Low",
+      "Low",
+      "Low"
+    ],
+    "confidence": [
+      "high",
+      "high",
+      "high",
+      "high",
+      "high"
+    ],
+    "stable": "✅"
+  }
+}
