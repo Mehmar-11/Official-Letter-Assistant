@@ -44,8 +44,9 @@ flowchart TD
 | Input verification | Reject non-letter content before full analysis |
 | pdfplumber | Extract text from text-based PDFs |
 | PyMuPDF + GPT-4o Vision | Process scanned PDFs and image uploads |
-| GPT-4o | Letter analysis, OCR, grounded chat, guided follow-up, reply draft |
+| GPT-4o | Letter analysis, OCR, grounded chat, guided follow-up, reply draft, translation |
 | Pydantic | Validate all structured LLM outputs before they reach the frontend |
+| Translation service | Re-translate existing analysis into any of 16 supported languages without re-analyzing |
 
 ---
 
@@ -96,6 +97,7 @@ GPT-4o handles all intelligent tasks:
 | Guided follow-up | Answer one of four predefined question types using selected letter fields |
 | Open chat | Answer user questions grounded in the current letter and its analysis |
 | Reply draft | Generate a formal German reply based on user intent and extracted letter facts |
+| Translation | Re-translate an existing structured analysis into a different output language |
 
 Structured outputs are validated with Pydantic before the UI receives them.
 
@@ -154,6 +156,8 @@ This makes confidence explainable and consistent — not a probabilistic guess f
 | `/analyze-pdf` | POST | Analyze uploaded PDF or image file |
 | `/follow-up` | POST | Answer one of four guided follow-up questions |
 | `/chat` | POST | Open chat, reply draft generation, and intent selection |
+| `/translate` | POST | Re-translate an existing analysis into a different language |
+| `/health` | GET | Check backend availability |
 
 Full request and response schemas are in [API.md](API.md).
 
