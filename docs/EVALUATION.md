@@ -74,9 +74,9 @@ Because the system uses an LLM, individual runs may differ slightly. The table b
 
 | Sample | Confidence | Urgency | Checks | Result |
 |--------|-----------|---------|--------|--------|
-| 01_insurance | high | High | 10/11 | PARTIAL |
+| 01_insurance | high | Medium | 9/11 | PARTIAL |
 | 02_immigration | high | High | 11/11 | PASS |
-| 03_university | high | High | 11/11 | PASS |
+| 03_university | high | High | 11/11 | PARTIAL |
 | 04_bank | medium | High | 11/11 | PASS |
 | 05_finanzamt | high | High | 11/11 | PARTIAL |
 | 06_housing | high | High | 11/11 | PARTIAL |
@@ -85,7 +85,7 @@ Because the system uses an LLM, individual runs may differ slightly. The table b
 | 09_incomplete_payment | medium | High | 10/10 | PASS |
 | 10_vague_notice | high | Low | 9/9 | PASS |
 
-**PASS: 6 / PARTIAL: 4 / FAIL: 0**
+**PASS: 5 / PARTIAL: 5 / FAIL: 0**
 
 The more meaningful signal is not the PASS count but the complete absence of FAILs and the stability of results across repeated runs.
 

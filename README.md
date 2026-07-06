@@ -2,7 +2,7 @@
 
 > Helping people in Germany understand and respond to official German letters — in their own language.
 
-**Live Demo:** `<TO_BE_ADDED>`
+**Live Demo:** `https://official-letter-assistant.vercel.app`
 
 ---
 

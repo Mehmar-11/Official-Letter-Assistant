@@ -85,5 +85,5 @@ Full API reference: [../docs/API.md](../docs/API.md)
 
 ## Deployment
 
-**Frontend:** `<TO_BE_ADDED>`  
-**Backend:** `<TO_BE_ADDED>`
+**Frontend:** https://official-letter-assistant.vercel.app  
+**Backend:** https://official-letter-assistant-backend.onrender.com

@@ -1,9 +1,9 @@
 {
-  "timestamp": "2026-07-06T14:22:26.783580",
+  "timestamp": "2026-07-06T17:18:04.832149",
   "backend_url": "http://localhost:8000",
   "total_samples": 10,
-  "passed": 6,
-  "partial": 4,
+  "passed": 5,
+  "partial": 5,
   "failed": 0,
   "errors": 0,
   "results": [
@@ -70,24 +70,24 @@
         },
         {
           "field": "must_contain in deadlines",
-          "passed": false,
+          "passed": true,
           "partial": false,
-          "note": "0/2 keywords found in deadlines"
+          "note": "2/2 keywords found in deadlines"
         },
         {
           "field": "must_contain in possible_consequences",
-          "passed": true,
-          "partial": true,
-          "note": "1/2 keywords found in possible_consequences"
+          "passed": false,
+          "partial": false,
+          "note": "0/2 keywords found in possible_consequences"
         }
       ],
       "actual_confidence": "high",
       "actual_confidence_reason": "The letter text was clear and all key details were identified.",
       "actual_urgency": "Medium",
       "actual_sender_type": "Insurance",
-      "actual_letter_topic": "Payment reminder for health insurance contributions",
-      "actual_tldr": "You need to pay 89.90 EUR by 14.10.2026 or submit proof of payment if you've already paid.",
-      "partial_matches": 1,
+      "actual_letter_topic": "Outstanding payment reminder for health insurance contribution",
+      "actual_tldr": "You need to pay 89.90 EUR by 14.10.2026 or upload proof of payment by 10.10.2026 if already paid.",
+      "partial_matches": 0,
       "failed_checks": 2
     },
     {
@@ -168,15 +168,15 @@
       "actual_confidence_reason": "The letter text was clear and all key details were identified.",
       "actual_urgency": "High",
       "actual_sender_type": "Public office",
-      "actual_letter_topic": "Extension of residence permit requiring additional documents",
-      "actual_tldr": "Submit the missing documents by 2026-08-04 to continue processing your residence permit extension application.",
+      "actual_letter_topic": "Extension of residence permit - missing documents",
+      "actual_tldr": "Submit the missing documents by August 4th to avoid rejection of your residence permit extension.",
       "partial_matches": 0,
       "failed_checks": 0
     },
     {
       "id": "03_university",
       "description": "University semester fee demand with exmatriculation threat",
-      "result": "PASS",
+      "result": "PARTIAL",
       "passed": 11,
       "total": 11,
       "checks": [
@@ -231,8 +231,8 @@
         {
           "field": "must_contain in payment_information",
           "passed": true,
-          "partial": false,
-          "note": "2/2 keywords found in payment_information"
+          "partial": true,
+          "note": "1/2 keywords found in payment_information"
         },
         {
           "field": "must_contain in deadlines",
@@ -251,9 +251,9 @@
       "actual_confidence_reason": "The letter text was clear and all key details were identified.",
       "actual_urgency": "High",
       "actual_sender_type": "University",
-      "actual_letter_topic": "Non-payment of semester fees",
-      "actual_tldr": "Pay the semester fee by August 30, 2026, to avoid exmatriculation and its impact on your residency status.",
-      "partial_matches": 0,
+      "actual_letter_topic": "Semester fee payment and potential exmatriculation",
+      "actual_tldr": "You need to pay the semester fee by 30.08.2026 or provide proof of payment to avoid exmatriculation.",
+      "partial_matches": 1,
       "failed_checks": 0
     },
     {
@@ -334,8 +334,8 @@
       "actual_confidence_reason": "This letter involves a payment, but the payment instructions appear incomplete — IBAN or payment recipient is missing.",
       "actual_urgency": "High",
       "actual_sender_type": "Bank",
-      "actual_letter_topic": "Account overdraft",
-      "actual_tldr": "You need to pay 347.32 EUR by 25th August 2026 to avoid bank penalties.",
+      "actual_letter_topic": "Account Overdraft Notification",
+      "actual_tldr": "You need to pay 347.32 EUR to your account by August 25 to avoid financial penalties.",
       "partial_matches": 0,
       "failed_checks": 0
     },
@@ -343,7 +343,7 @@
       "id": "05_finanzamt",
       "description": "Tax office income tax assessment with Einspruch and Saumniszuschlag",
       "result": "PARTIAL",
-      "passed": 11,
+      "passed": 10,
       "total": 11,
       "checks": [
         {
@@ -408,19 +408,19 @@
         },
         {
           "field": "must_contain in unclear_or_risky_parts",
-          "passed": true,
+          "passed": false,
           "partial": false,
-          "note": "2/2 keywords found in unclear_or_risky_parts"
+          "note": "0/2 keywords found in unclear_or_risky_parts"
         }
       ],
       "actual_confidence": "high",
       "actual_confidence_reason": "The letter text was clear and all key details were identified.",
       "actual_urgency": "High",
       "actual_sender_type": "Public office",
-      "actual_letter_topic": "Income Tax Payment Notice for 2024",
-      "actual_tldr": "You need to pay EUR 788.09 by August 14, 2026, to avoid late fees.",
+      "actual_letter_topic": "Einkommensteuerbescheid 2024 and payment required.",
+      "actual_tldr": "You need to pay 788.09 EUR by August 14, 2026, to avoid penalties.",
       "partial_matches": 1,
-      "failed_checks": 0
+      "failed_checks": 1
     },
     {
       "id": "06_housing",
@@ -492,17 +492,17 @@
         {
           "field": "must_contain in required_actions",
           "passed": true,
-          "partial": true,
-          "note": "1/2 keywords found in required_actions"
+          "partial": false,
+          "note": "2/2 keywords found in required_actions"
         }
       ],
       "actual_confidence": "high",
       "actual_confidence_reason": "The letter text was clear and all key details were identified.",
       "actual_urgency": "High",
       "actual_sender_type": "Other",
-      "actual_letter_topic": "Operating cost settlement for 2025 and payment adjustment",
-      "actual_tldr": "Pay the outstanding balance of 287.60 EUR by September 1, 2026, and notice the adjusted future payments.",
-      "partial_matches": 2,
+      "actual_letter_topic": "Utility bill settlement and payment adjustment",
+      "actual_tldr": "You need to pay EUR 287.60 by September 1, 2026, and your monthly advance payment will increase from August 2026.",
+      "partial_matches": 1,
       "failed_checks": 0
     },
     {
@@ -571,8 +571,8 @@
       "actual_confidence_reason": "The letter text was clear and all key details were identified.",
       "actual_urgency": "Low",
       "actual_sender_type": "Other",
-      "actual_letter_topic": "Contract adjustment for internet service",
-      "actual_tldr": "Your internet upload speed will increase from September 1, and you don't need to do anything unless you decide to cancel your contract by August 31.",
+      "actual_letter_topic": "Internet Contract Modification",
+      "actual_tldr": "Your internet upload speed will increase automatically on September 1, and no action is needed unless you want to cancel.",
       "partial_matches": 0,
       "failed_checks": 0
     },
@@ -580,7 +580,7 @@
       "id": "08_high_urgency",
       "description": "Jobcenter document request with 4-day deadline and benefit suspension threat",
       "result": "PARTIAL",
-      "passed": 11,
+      "passed": 10,
       "total": 11,
       "checks": [
         {
@@ -639,9 +639,9 @@
         },
         {
           "field": "must_contain in possible_consequences",
-          "passed": true,
-          "partial": true,
-          "note": "3/4 keywords found in possible_consequences"
+          "passed": false,
+          "partial": false,
+          "note": "1/4 keywords found in possible_consequences"
         },
         {
           "field": "must_contain in required_documents",
@@ -654,10 +654,10 @@
       "actual_confidence_reason": "The letter text was clear and all key details were identified.",
       "actual_urgency": "High",
       "actual_sender_type": "Public office",
-      "actual_letter_topic": "Requirement to submit documents for benefit continuation",
+      "actual_letter_topic": "Submission of required documents to Jobcenter",
       "actual_tldr": "Submit the missing documents by August 23 to avoid suspension of benefits.",
-      "partial_matches": 2,
-      "failed_checks": 0
+      "partial_matches": 1,
+      "failed_checks": 1
     },
     {
       "id": "09_incomplete_payment",
@@ -731,8 +731,8 @@
       "actual_confidence_reason": "This letter involves a payment, but the payment instructions appear incomplete — IBAN or payment recipient is missing.",
       "actual_urgency": "High",
       "actual_sender_type": "Other",
-      "actual_letter_topic": "Payment demand for an outstanding debt",
-      "actual_tldr": "You need to pay €312.80 by August 28, 2026, to avoid possible legal action.",
+      "actual_letter_topic": "Payment Demand for Outstanding Debt",
+      "actual_tldr": "You need to pay €312.80 by 28.08.2026 to avoid legal action.",
       "partial_matches": 0,
       "failed_checks": 0
     },
@@ -802,8 +802,8 @@
       "actual_confidence_reason": "The letter text was clear and all key details were identified.",
       "actual_urgency": "Low",
       "actual_sender_type": "Public office",
-      "actual_letter_topic": "Status update on your process",
-      "actual_tldr": "Your process is being handled, and they will inform you once there's an update.",
+      "actual_letter_topic": "Processing of a case",
+      "actual_tldr": "Your case is being processed and they will inform you when there's an update.",
       "partial_matches": 0,
       "failed_checks": 0
     }

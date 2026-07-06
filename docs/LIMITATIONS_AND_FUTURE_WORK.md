@@ -26,7 +26,7 @@ GPT-4o produces slightly different outputs across repeated runs with
 identical input. This affects urgency classification in borderline cases
 --- for example, whether a minor financial penalty constitutes a
 "serious consequence" that warrants High urgency. The stability analysis
-in `docs/EVALUATION.md` quantifies this effect: 8 out of 10 evaluation
+in `EVALUATION.md` quantifies this effect: 8 out of 10 evaluation
 samples were fully stable across 5 repeated runs, but 2 samples showed
 urgency variation.
 

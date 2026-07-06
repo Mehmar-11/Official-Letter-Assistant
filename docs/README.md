@@ -89,12 +89,12 @@ Frontend runs at: `http://localhost:5173`
 
 ## Documentation
 
-- [Architecture & System Design](docs/ARCHITECTURE.md)
-- [API Reference](docs/API.md)
-- [LLM Design Decisions](docs/LLM_DECISIONS.md)
-- [Evaluation & Golden Set](docs/EVALUATION.md)
-- [Demo Narrative](docs/DEMO.md)
-- [Limitations & Future Work](docs/LIMITATIONS_AND_FUTURE_WORK.md)
+- [Architecture & System Design](ARCHITECTURE.md)
+- [API Reference](API.md)
+- [LLM Design Decisions](LLM_DECISIONS.md)
+- [Evaluation & Golden Set](EVALUATION.md)
+- [Demo Narrative](DEMO.md)
+- [Limitations & Future Work](LIMITATIONS_AND_FUTURE_WORK.md)
 
 ---
 
@@ -106,5 +106,5 @@ Frontend runs at: `http://localhost:5173`
 | **LLM integration quality** | Two-layer prompting architecture, Pydantic validation at every LLM boundary, grounding strictly in letter text and structured analysis, rule-based confidence level (not LLM-generated), streaming, safety notes on every response. |
 | **Engineering practice** | FastAPI with clear route/service/schema separation, Pydantic schema validation before UI rendering, controlled error handling at every endpoint, documented setup, environment configuration, and golden set evaluation. |
 | **User experience** | Structured result cards, guided question cards, grounded open chat with multi-language support, reply draft with smart placeholders, analysis quality label, clear privacy notice, and dark mode UI. |
-| **Documentation** | API reference, architecture diagram, LLM design decisions, golden set evaluation, demo narrative — all in the `docs/` folder. |
+| **Documentation** | API reference, architecture diagram, LLM design decisions, golden set evaluation, demo guide — all in the `docs/` folder. |
 | **Innovation & ethics** | No permanent storage (session-only), synthetic demo data, input verification to reject non-letter content, safety note on every analysis, rule-based confidence label to prevent over-trust in LLM output. |
