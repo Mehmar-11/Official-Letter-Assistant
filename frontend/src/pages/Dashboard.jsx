@@ -920,9 +920,9 @@ export default function Dashboard({ onBack }) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
   const [replyOptions, setReplyOptions] = useState(null);
-  const [replyIntent, setReplyIntent] = useState(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatTranslationCache, setChatTranslationCache] = useState({});
+  const [chatError, setChatError] = useState(null);
 
   const typewriterRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -943,31 +943,22 @@ export default function Dashboard({ onBack }) {
   const translateChatMessages = async (messages, targetLang) => {
     if (!messages || messages.length === 0 || targetLang === "English") return messages;
     
-    // Check cache
     const cacheKey = `${JSON.stringify(messages)}_${targetLang}`;
     if (chatTranslationCache[cacheKey]) {
       return chatTranslationCache[cacheKey];
     }
 
     try {
-      // Try to use the backend translation for each message
       const translatedMessages = await Promise.all(
         messages.map(async (msg) => {
-          // Skip translation for welcome message - it's already in the UI_LABELS
           if (msg.role === "assistant" && msg.content === UI_LABELS.English.welcome) {
             return { ...msg, content: UI_LABELS[targetLang]?.welcome || msg.content };
           }
-          
-          // Skip translation for option messages
           if (msg.isOptions) return msg;
-          
-          // For user messages, try to translate if they contain English text
-          // For assistant responses, try to translate
           return msg;
         })
       );
       
-      // Cache the result
       setChatTranslationCache(prev => ({ ...prev, [cacheKey]: translatedMessages }));
       return translatedMessages;
     } catch (err) {
@@ -979,7 +970,6 @@ export default function Dashboard({ onBack }) {
   // ========== INSTANT LANGUAGE SWITCHING ==========
   useEffect(() => {
     const updateContent = async () => {
-      // Update analysis results
       if (originalResult) {
         if (outputLanguage === "English") {
           setResult(originalResult);
@@ -996,12 +986,10 @@ export default function Dashboard({ onBack }) {
         }
       }
       
-      // Update chat welcome message
       const newWelcome = labels.welcome;
       setChatMessages(prev => {
         const newMessages = [...prev];
         if (newMessages.length > 0 && newMessages[0].role === "assistant") {
-          // Check if first message is welcome message
           const isWelcome = newMessages[0].content === UI_LABELS.English.welcome || 
                            Object.values(UI_LABELS).some(l => l.welcome === newMessages[0].content);
           if (isWelcome) {
@@ -1224,13 +1212,20 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
   };
 
   const analyzeLetter = async () => {
-    if (mode === "text" && !text.trim()) return alert("Please paste your letter text");
-    if (mode === "pdf" && !file) return alert("Please upload a PDF or image file");
+    if (mode === "text" && !text.trim()) {
+      alert("Please paste your letter text");
+      return;
+    }
+    if (mode === "pdf" && !file) {
+      alert("Please upload a PDF or image file");
+      return;
+    }
 
     setLoading(true);
     setResult(null);
     setOriginalResult(null);
     setAnimatedSummary("");
+    setChatError(null);
     const welcomeMsg = labels.welcome;
     setChatMessages([{ role: "assistant", content: welcomeMsg }]);
 
@@ -1255,8 +1250,21 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
         });
       }
 
-      if (!response.ok) throw new Error("Backend error");
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Backend error");
+      }
+      
       const data = await response.json();
+      
+      // Check if the letter is valid
+      if (data.is_valid_letter === false) {
+        // Display the localized message from the backend
+        const invalidMessage = data.message || "This doesn't look like an official German letter.";
+        setChatMessages([{ role: "assistant", content: invalidMessage }]);
+        setLoading(false);
+        return;
+      }
       
       setOriginalResult(data);
       setResult(data);
@@ -1270,52 +1278,60 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     }
   };
 
-  const generateFallbackResponse = (question, letterData) => {
-    const lowerQ = question.toLowerCase();
-    const currentLabels = UI_LABELS[outputLanguage] || UI_LABELS.English;
+  // ========== NEW: Call /reply-draft endpoint ==========
+  const generateReplyDraft = async (intent) => {
+    if (!result) return;
     
-    const getTranslated = (key) => currentLabels[key] || UI_LABELS.English[key] || key;
-    
-    if (lowerQ.includes("deadline") || lowerQ.includes("when") || lowerQ.includes("date")) {
-      if (letterData?.deadlines?.length > 0) {
-        return `📅 ${getTranslated('deadline')}: ${letterData.deadlines.join(', ')}. ${getTranslated('actBefore')}`;
+    setIsStreaming(true);
+    setStreamingMessage("Generating reply draft...");
+    setChatError(null);
+
+    try {
+      const requestBody = {
+        analysis: result,
+        intent: intent,
+        output_language: outputLanguage,
+      };
+
+      const response = await fetch(`${API_URL}/reply-draft`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || "Failed to generate reply draft");
       }
-      return "I couldn't find a specific deadline in the letter.";
+
+      const data = await response.json();
+      
+      // Add the reply draft to chat
+      setChatMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: data.reply || "Here's your reply draft."
+      }]);
+      
+    } catch (err) {
+      console.error("Reply draft error:", err);
+      setChatError(err.message || "Failed to generate reply draft. Please try again.");
+      setChatMessages(prev => [...prev, { 
+        role: "assistant", 
+        content: `❌ ${err.message || "Failed to generate reply draft. Please try again."}`
+      }]);
+    } finally {
+      setIsStreaming(false);
+      setStreamingMessage("");
     }
-    
-    if (lowerQ.includes("pay") || lowerQ.includes("payment") || lowerQ.includes("amount")) {
-      if (letterData?.payment_information?.length > 0) {
-        return `💳 ${getTranslated('payment')}: ${letterData.payment_information.join(', ')}`;
-      }
-      return "No payment is required based on this letter.";
-    }
-    
-    if (lowerQ.includes("what to do") || lowerQ.includes("action") || lowerQ.includes("should i")) {
-      if (letterData?.required_actions?.length > 0) {
-        return `✅ ${getTranslated('whatToDo')}:\n${letterData.required_actions.map((a, i) => `${i+1}. ${a}`).join('\n')}`;
-      }
-      return "No specific actions are required based on this letter.";
-    }
-    
-    if (lowerQ.includes("draft") || lowerQ.includes("reply") || lowerQ.includes("respond")) {
-      const senderName = letterData?.sender || 'Sir/Madam';
-      return `✏️ ${getTranslated('draftReply')}:\n\nDear ${senderName},\n\nThank you for your letter. I have reviewed the information provided. I will take the necessary actions as requested.\n\nBest regards,\n[Your Name]`;
-    }
-    
-    let defaultResponse = `📖 ${getTranslated('basedOn')}\n\n`;
-    if (letterData?.tldr) defaultResponse += `${letterData.tldr}\n\n`;
-    if (letterData?.required_actions?.length > 0) defaultResponse += `✅ ${getTranslated('actionsNeeded')}: ${letterData.required_actions.join(', ')}\n`;
-    if (letterData?.deadlines?.length > 0) defaultResponse += `📅 ${getTranslated('deadline')}: ${letterData.deadlines.join(', ')}\n`;
-    if (letterData?.sender) defaultResponse += `📧 ${getTranslated('from')}: ${letterData.sender}`;
-    
-    return defaultResponse || "I've read the letter. What specific information are you looking for?";
   };
 
+  // ========== UPDATED: sendChatMessage with SSE events ==========
   const sendChatMessage = async () => {
     if (!chatInput.trim() || isStreaming) return;
     
     const userMessage = chatInput;
     setChatInput("");
+    setChatError(null);
     
     const messagesHistory = chatMessages.map(msg => ({
       role: msg.role,
@@ -1327,6 +1343,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     
     setIsStreaming(true);
     setStreamingMessage("");
+    setReplyOptions(null);
     
     try {
       const analysisData = {
@@ -1351,11 +1368,11 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
         safety_note: result?.safety_note || "This is AI-generated help, not legal advice. Please verify important decisions with the responsible office or a qualified advisor.",
       };
 
+      // ✅ REMOVED: reply_intent from the request
       const requestBody = {
         letter_text: result?.letter_text || text || "",
         analysis: analysisData,
         messages: messagesHistory,
-        reply_intent: replyIntent || null,
         output_language: outputLanguage,
       };
 
@@ -1366,15 +1383,17 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       });
 
       if (!response.ok) {
-        throw new Error(`Backend error: ${response.status}`);
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Backend error: ${response.status}`);
       }
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let fullResponse = "";
       let buffer = "";
+      let isDone = false;
       
-      while (true) {
+      while (!isDone) {
         const { done, value } = await reader.read();
         if (done) break;
         
@@ -1388,43 +1407,49 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
           const trimmedLine = line.trim();
           if (!trimmedLine) continue;
           
+          // Handle SSE events
+          if (trimmedLine.startsWith("event: ")) {
+            // Parse event type
+            const eventType = trimmedLine.substring(7);
+            continue;
+          }
+          
           if (trimmedLine.startsWith("data: ")) {
             try {
               const jsonStr = trimmedLine.substring(6);
               const data = JSON.parse(jsonStr);
               
-              if (data.ui_action === "show_reply_options") {
+              // ✅ Handle token events
+              if (data.type === "token" && data.content) {
+                fullResponse += data.content;
+                setStreamingMessage(fullResponse);
+              }
+              
+              // ✅ Handle reply_options events
+              else if (data.type === "reply_options") {
                 setReplyOptions(data.options);
-                setChatMessages(prev => [...prev, { 
-                  role: "assistant", 
-                  content: data.reply || "How would you like me to write the reply?",
-                  isOptions: true,
-                  options: data.options
-                }]);
-                setIsStreaming(false);
-                setStreamingMessage("");
-                return;
-              } else if (data.reply) {
+                // Store the options message but don't add to chat yet
+                // We'll add it when the stream is done
+              }
+              
+              // ✅ Handle done events
+              else if (data.type === "done") {
+                isDone = true;
+              }
+              
+              // ✅ Handle error events
+              else if (data.type === "error") {
+                throw new Error(data.message || "An error occurred during chat");
+              }
+              
+              // Fallback for legacy format
+              else if (data.reply) {
                 fullResponse += data.reply;
                 setStreamingMessage(fullResponse);
               }
             } catch (e) {
-              if (trimmedLine.length > 10) {
-                fullResponse += trimmedLine;
-                setStreamingMessage(fullResponse);
-              }
-            }
-          } else {
-            try {
-              const data = JSON.parse(trimmedLine);
-              if (data.reply) {
-                fullResponse += data.reply;
-                setStreamingMessage(fullResponse);
-              }
-            } catch (e) {
-              if (trimmedLine.length > 10) {
-                fullResponse += trimmedLine;
-                setStreamingMessage(fullResponse);
+              if (trimmedLine.length > 10 && !trimmedLine.includes("event:")) {
+                console.warn("Could not parse SSE data:", trimmedLine);
               }
             }
           }
@@ -1432,24 +1457,37 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       }
       
       setIsStreaming(false);
-      setReplyIntent(null);
-      setReplyOptions(null);
       
+      // Handle the final response
       if (fullResponse) {
         setChatMessages(prev => [...prev, { role: "assistant", content: fullResponse }]);
-      } else {
-        const fallbackResponse = generateFallbackResponse(userMessage, result);
-        setChatMessages(prev => [...prev, { role: "assistant", content: fallbackResponse }]);
+      } 
+      // If we have reply options but no text response
+      else if (replyOptions && replyOptions.length > 0) {
+        setChatMessages(prev => [...prev, { 
+          role: "assistant", 
+          content: "How would you like me to write the reply?",
+          isOptions: true,
+          options: replyOptions
+        }]);
+      }
+      // If nothing was returned, show a clear error
+      else {
+        const errorMsg = "I couldn't process your request. Please try again.";
+        setChatMessages(prev => [...prev, { role: "assistant", content: `❌ ${errorMsg}` }]);
+        setChatError(errorMsg);
       }
       
     } catch (err) {
-      console.error("❌ Chat error, using fallback:", err);
+      console.error("Chat error:", err);
       setIsStreaming(false);
       
-      const fallbackResponse = generateFallbackResponse(chatInput || userMessage, result);
+      // Clear error message for the user
+      const errorMsg = err.message || "Something went wrong. Please try again.";
+      setChatError(errorMsg);
       setChatMessages(prev => [...prev, { 
         role: "assistant", 
-        content: fallbackResponse 
+        content: `❌ ${errorMsg}`
       }]);
     } finally {
       setIsStreaming(false);
@@ -1457,14 +1495,14 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     }
   };
 
-  const handleSuggestionClick = (suggestion) => {
-    setChatInput(suggestion);
-    setTimeout(() => sendChatMessage(), 100);
+  // ========== UPDATED: Handle reply option click ==========
+  const handleReplyOptionClick = (option) => {
+    // Call the separate /reply-draft endpoint
+    generateReplyDraft(option);
   };
 
-  const handleReplyOptionClick = (option) => {
-    setReplyIntent(option);
-    setChatInput(option);
+  const handleSuggestionClick = (suggestion) => {
+    setChatInput(suggestion);
     setTimeout(() => sendChatMessage(), 100);
   };
 
@@ -1478,7 +1516,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     setChatMessages([{ role: "assistant", content: labels.welcome }]);
     setSessionLetterCount(0);
     setReplyOptions(null);
-    setReplyIntent(null);
+    setChatError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -1525,6 +1563,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     careful: labels.accordionCareful
   };
 
+  // ========== STYLES ==========
   const getStyles = () => ({
     page: {
       background: darkMode ? "#0f172a" : "#f3f6fb",
@@ -2445,11 +2484,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                             fontSize: "11px",
                             cursor: "pointer",
                           }}
-                          onClick={() => {
-                            setReplyIntent(opt);
-                            setChatInput(opt);
-                            setTimeout(() => sendChatMessage(), 100);
-                          }}
+                          onClick={() => handleReplyOptionClick(opt)}
                         >
                           {opt}
                         </button>
@@ -2492,6 +2527,28 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
               </div>
             </div>
           )}
+          {chatError && (
+            <div
+              style={{
+                ...styles.chatMessageWrapper,
+                ...styles.chatMessageWrapperAssistant,
+              }}
+            >
+              <div style={styles.chatAvatar}>⚠️</div>
+              <div>
+                <div
+                  style={{
+                    ...styles.chatBubble,
+                    ...styles.chatBubbleAssistant,
+                    background: darkMode ? "#2a1414" : "#fee2e2",
+                    color: "#dc2626",
+                  }}
+                >
+                  ❌ {chatError}
+                </div>
+              </div>
+            </div>
+          )}
           <div ref={chatEndRef} />
         </div>
 
@@ -2512,10 +2569,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                     : "#e5e7eb";
                   e.currentTarget.style.color = darkMode ? "#e2e8f0" : "#374151";
                 }}
-                onClick={() => {
-                  setChatInput(sug);
-                  setTimeout(() => sendChatMessage(), 100);
-                }}
+                onClick={() => handleSuggestionClick(sug)}
               >
                 {sug}
               </div>
