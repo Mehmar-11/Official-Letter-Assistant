@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import ValidationError
 
-from app.schemas.analysis import AnalyzeTextResponse, FollowUpResponse
+from app.schemas.analysis import FollowUpResponse, LLMAnalysisResponse
 
 
 load_dotenv()
@@ -146,11 +146,11 @@ def get_analysis_response_schema() -> Dict[str, Any]:
     """
     Return the JSON schema for the expected letter analysis response.
 
-    AnalyzeTextResponse is the single source of truth for the backend response
-    structure. The schema is made strict for OpenAI structured outputs by
-    disallowing additional properties.
+    LLMAnalysisResponse is the single source of truth for the model-generated
+    structure. Backend-generated fields such as letter_text and confidence are
+    added only after validation.
     """
-    schema = AnalyzeTextResponse.model_json_schema()
+    schema = LLMAnalysisResponse.model_json_schema()
     schema["additionalProperties"] = False
     return schema
 
@@ -158,10 +158,10 @@ def get_analysis_response_schema() -> Dict[str, Any]:
 def parse_and_validate_llm_response(raw_response: str) -> Dict[str, Any]:
     """
     Parse a raw JSON string returned by the LLM and validate it against
-    the backend response schema.
+    the internal model-output schema.
 
-    This prevents invalid or incomplete LLM output from being sent directly
-    to the frontend.
+    This prevents invalid or incomplete model output from entering the
+    backend analysis flow.
     """
     try:
         parsed_response = json.loads(raw_response)
@@ -169,7 +169,7 @@ def parse_and_validate_llm_response(raw_response: str) -> Dict[str, Any]:
         raise ValueError("LLM response is not valid JSON.") from exc
 
     try:
-        validated_response = AnalyzeTextResponse(**parsed_response)
+        validated_response = LLMAnalysisResponse(**parsed_response)
     except ValidationError as exc:
         raise ValueError("LLM response does not match the expected schema.") from exc
 
@@ -216,6 +216,9 @@ def get_mock_letter_analysis() -> Dict[str, Any]:
     frontend can be developed and tested without making API calls.
     """
     return {
+        "is_valid_letter": True,
+        "message": "",
+        "letter_involves_payment": False,
         "sender": "Amt für Einwanderung Musterstadt",
         "sender_type": "Public office",
         "urgency_level": "Medium",
@@ -473,7 +476,6 @@ How to talk:
 
 Reply draft:
 - If the user asks you to write a reply, draft a reply, or respond to the letter, return exactly this token and nothing else: REPLY_DRAFT_REQUESTED
-- If the user's message is one of these intents: "I already took care of it", "I need more time or have a question", "I disagree with this letter" — return exactly this token and nothing else: REPLY_DRAFT_GENERATE::<their message>
 - Do not generate the draft yourself. Do not explain. Just return the token.
 
 Letter text:
