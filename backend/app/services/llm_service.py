@@ -473,7 +473,6 @@ How to talk:
 
 Reply draft:
 - If the user asks you to write a reply, draft a reply, or respond to the letter, return exactly this token and nothing else: REPLY_DRAFT_REQUESTED
-- If the user's message is one of these intents: "I already took care of it", "I need more time or have a question", "I disagree with this letter" — return exactly this token and nothing else: REPLY_DRAFT_GENERATE::<their message>
 - Do not generate the draft yourself. Do not explain. Just return the token.
 
 Letter text:

@@ -1,23 +1,43 @@
-from typing import Union
+import json
+from typing import Iterator, Union
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from app.schemas.analysis import TranslateRequest
-from app.schemas.common import OutputLanguage
+from fastapi.responses import StreamingResponse
+
 from app.schemas.analysis import (
     AnalyzeTextRequest,
     AnalyzeTextResponse,
-    InvalidLetterResponse,
+    ChatRequest,
     FollowUpRequest,
     FollowUpResponse,
-    ChatRequest,
-    ChatResponse,
+    InvalidLetterResponse,
+    ReplyDraftRequest,
+    ReplyDraftResponse,
+    TranslateRequest,
 )
+from app.schemas.common import OutputLanguage
 from app.services.analysis_service import analyze_letter_text
 from app.services.pdf_service import extract_text_from_pdf_bytes, extract_text_from_image_bytes
 from app.services.followup_service import answer_followup_question
 from app.services.llm_service import chat_with_llm_stream, generate_reply_draft
 
 router = APIRouter()
+
+REPLY_DRAFT_REQUESTED = "REPLY_DRAFT_REQUESTED"
+REPLY_OPTIONS = [
+    "already_completed",
+    "need_more_time_or_question",
+    "disagree",
+]
+REPLY_INTENT_INSTRUCTIONS = {
+    "already_completed": "I already took care of it",
+    "need_more_time_or_question": "I need more time or have a question",
+    "disagree": "I disagree with this letter",
+}
+
+
+class EventStreamResponse(StreamingResponse):
+    media_type = "text/event-stream"
 
 
 def analyze_letter_or_raise_http_error(
@@ -92,16 +112,33 @@ def follow_up(request: FollowUpRequest):
         ) from error
 
 
-@router.post("/chat", response_model=ChatResponse)
-def chat(request: ChatRequest):
-    try:
-        if request.reply_intent:
-            draft = generate_reply_draft(
-                analysis=request.analysis.model_dump(),
-                intent=request.reply_intent,
-            )
-            return ChatResponse(reply=draft)
+def format_sse_event(event_type: str, **payload) -> str:
+    data = {"type": event_type, **payload}
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
+
+def validate_grounded_interaction(
+    letter_text: str,
+    analysis: AnalyzeTextResponse,
+) -> None:
+    if not analysis.is_valid_letter:
+        raise HTTPException(
+            status_code=400,
+            detail="Chat requires a valid analyzed letter.",
+        )
+
+    if letter_text.strip() != analysis.letter_text.strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Letter text does not match the analyzed letter.",
+        )
+
+
+def stream_chat_events(request: ChatRequest) -> Iterator[str]:
+    buffered_prefix = ""
+    checking_control_token = True
+
+    try:
         stream = chat_with_llm_stream(
             letter_text=request.letter_text,
             analysis=request.analysis.model_dump(),
@@ -109,25 +146,78 @@ def chat(request: ChatRequest):
             output_language=request.output_language,
         )
 
-        reply = "".join(stream)
+        for chunk in stream:
+            if not chunk:
+                continue
 
-        if reply.strip() == "REPLY_DRAFT_REQUESTED":
-            return ChatResponse(
-                reply="Sure! What's the purpose of your reply?",
-                ui_action="show_reply_options",
-                options=[
-                    "I already took care of it",
-                    "I need more time or have a question",
-                    "I disagree with this letter",
-                ]
-            )
+            if checking_control_token:
+                buffered_prefix += chunk
+                candidate = buffered_prefix.strip()
 
-        return ChatResponse(reply=reply)
+                if REPLY_DRAFT_REQUESTED.startswith(candidate):
+                    continue
 
+                checking_control_token = False
+                yield format_sse_event("token", content=buffered_prefix)
+                buffered_prefix = ""
+                continue
+
+            yield format_sse_event("token", content=chunk)
+
+        if checking_control_token:
+            if buffered_prefix.strip() == REPLY_DRAFT_REQUESTED:
+                yield format_sse_event(
+                    "reply_options",
+                    options=REPLY_OPTIONS,
+                )
+            elif buffered_prefix.strip():
+                yield format_sse_event("token", content=buffered_prefix)
+            else:
+                yield format_sse_event(
+                    "error",
+                    message="Chat returned an empty response.",
+                )
+                return
+
+        yield format_sse_event("done")
+    except Exception:
+        yield format_sse_event(
+            "error",
+            message="Chat request failed.",
+        )
+
+
+@router.post("/chat", response_class=EventStreamResponse)
+def chat(request: ChatRequest):
+    validate_grounded_interaction(request.letter_text, request.analysis)
+
+    return EventStreamResponse(
+        stream_chat_events(request),
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/reply-draft", response_model=ReplyDraftResponse)
+def reply_draft(request: ReplyDraftRequest):
+    if not request.analysis.is_valid_letter:
+        raise HTTPException(
+            status_code=400,
+            detail="Reply drafting requires a valid analyzed letter.",
+        )
+
+    try:
+        draft = generate_reply_draft(
+            analysis=request.analysis.model_dump(),
+            intent=REPLY_INTENT_INSTRUCTIONS[request.intent],
+        )
+        return ReplyDraftResponse(reply=draft)
     except Exception as error:
         raise HTTPException(
             status_code=502,
-            detail="Chat request failed.",
+            detail="Reply draft request failed.",
         ) from error
 
 

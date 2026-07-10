@@ -113,7 +113,8 @@ npm run dev
 | `/analyze-text` | POST | Analyze pasted letter text |
 | `/analyze-pdf` | POST | Analyze uploaded PDF or image |
 | `/follow-up` | POST | Answer one of four guided questions |
-| `/chat` | POST | Open chat, reply draft, intent selection |
+| `/chat` | POST | Stream grounded open-chat responses using SSE |
+| `/reply-draft` | POST | Generate one complete formal German reply |
 | `/translate` | POST | Re-translate an existing analysis into a different language |
 | `/health` | GET | Check backend availability |
 

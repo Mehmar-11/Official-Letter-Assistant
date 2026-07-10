@@ -79,7 +79,13 @@ The `/translate` endpoint takes a full `AnalyzeTextResponse` and a target langua
 
 **Why**: Open-ended reply generation is risky for official letters. If the user describes their situation inaccurately or vaguely, the generated reply may be inappropriate or misleading. Three explicit intents ("I already took care of it", "I need more time or have a question", "I disagree with this letter") cover the realistic reasons someone would reply to an official letter, while keeping the system in control of what is generated.
 
-**Implementation**: When `reply_intent` is present, the backend bypasses the chat flow entirely and calls `generate_reply_draft` directly. The draft is always grounded in the validated structured analysis — reference numbers, deadlines, and amounts come from extracted facts, not from LLM inference. Personal details the system does not have are replaced with explicit placeholders.
+**Implementation**: The frontend sends one stable intent identifier
+(`already_completed`, `need_more_time_or_question`, or `disagree`) to the
+dedicated `/reply-draft` endpoint. The frontend owns the localized display
+labels. The draft is returned as one complete JSON response and is always
+grounded in the validated structured analysis — reference numbers, deadlines,
+and amounts come from extracted facts, not from LLM inference. Personal details
+the system does not have are replaced with explicit placeholders.
 
 ---
 
@@ -99,7 +105,12 @@ The `/translate` endpoint takes a full `AnalyzeTextResponse` and a target langua
 
 **Why**: Letter analysis responses (Layer 1) are returned as complete structured JSON — streaming is inappropriate there. Chat responses are conversational and can be long. Streaming delivers tokens to the frontend as they are generated, which reduces perceived latency and makes the interaction feel responsive.
 
-**Trade-off**: Streaming makes error handling more complex. If the model starts a response and then produces an error mid-stream, the frontend has already started rendering. This is managed by collecting the full streamed response before checking for special tokens (`REPLY_DRAFT_REQUESTED`).
+**Trade-off**: Streaming makes error handling more complex. If the model starts
+a response and then produces an error mid-stream, the frontend has already
+started rendering. The backend therefore emits typed SSE events (`token`,
+`reply_options`, `done`, and `error`). It buffers only the short initial prefix
+needed to detect `REPLY_DRAFT_REQUESTED`; ordinary chat content continues to
+stream immediately after that check.
 
 ---
 

@@ -121,16 +121,20 @@ The chat system prompt always includes the full letter text and the validated an
 
 ```mermaid
 flowchart TD
-    A[User Message] --> B{reply_intent present?}
-    B -->|Yes| C[generate_reply_draft]
-    C --> D[Formal German Letter with Placeholders]
-    B -->|No| E[chat_with_llm_stream]
-    E --> F{Token check}
-    F -->|REPLY_DRAFT_REQUESTED| G[Return ui_action: show_reply_options]
-    F -->|Regular response| H[Stream reply text to frontend]
+    A[User Message] --> B[POST /chat]
+    B --> C[chat_with_llm_stream]
+    C --> D{Token check}
+    D -->|REPLY_DRAFT_REQUESTED| E[Stream reply_options event]
+    D -->|Regular response| F[Stream token events]
+    G[Selected Reply Intent] --> H[POST /reply-draft]
+    H --> I[generate_reply_draft]
+    I --> J[Complete German Letter with Placeholders]
 ```
 
-When the user selects a reply intent from the three options, the frontend sends it as `reply_intent`. The backend skips the chat flow entirely and calls `generate_reply_draft` directly with the validated analysis and the selected intent.
+Open chat uses SSE token events. When the model detects a draft request, the
+backend emits a `reply_options` event without exposing the model's control
+token. The selected intent is then sent to `/reply-draft`, which returns one
+complete formal German draft as JSON.
 
 ---
 
@@ -155,7 +159,8 @@ This makes confidence explainable and consistent — not a probabilistic guess f
 | `/analyze-text` | POST | Analyze pasted letter text |
 | `/analyze-pdf` | POST | Analyze uploaded PDF or image file |
 | `/follow-up` | POST | Answer one of four guided follow-up questions |
-| `/chat` | POST | Open chat, reply draft generation, and intent selection |
+| `/chat` | POST | Stream grounded open-chat responses and reply-option events |
+| `/reply-draft` | POST | Generate one complete formal German reply |
 | `/translate` | POST | Re-translate an existing analysis into a different language |
 | `/health` | GET | Check backend availability |
 
