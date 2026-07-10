@@ -133,9 +133,11 @@ class ChatContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             build_chat_request(reply_intent="already_completed")
 
-    def test_chat_route_uses_event_stream_media_type(self):
+    @patch("app.routes.analysis.require_llm_config")
+    def test_chat_route_uses_event_stream_media_type(self, config_mock):
         response = chat(build_chat_request())
 
+        config_mock.assert_called_once_with()
         self.assertEqual(response.media_type, "text/event-stream")
         self.assertEqual(response.headers["cache-control"], "no-cache")
 

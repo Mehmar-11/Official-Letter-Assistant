@@ -79,6 +79,11 @@ class AnalysisContractTests(unittest.TestCase):
         self.assertNotIn("letter_text", properties)
         self.assertNotIn("confidence_level", properties)
         self.assertNotIn("confidence_reason", properties)
+        self.assertEqual(properties["useful_details"]["maxItems"], 50)
+        self.assertEqual(
+            properties["urgency_level"]["enum"],
+            ["High", "Medium", "Low"],
+        )
 
     def test_invalid_letter_payload_is_validated_and_preserved(self):
         payload = build_llm_payload(
@@ -149,8 +154,8 @@ class AnalysisContractTests(unittest.TestCase):
             "This doesn't look like an official German letter.",
         )
 
-    @patch("app.services.translation_service.OpenAI")
-    def test_translation_preserves_the_actual_confidence_reason(self, openai_mock):
+    @patch("app.services.translation_service.get_openai_client")
+    def test_translation_preserves_the_actual_confidence_reason(self, client_mock):
         analysis = build_analysis()
         translated_payload = analysis.model_dump()
         translated_payload["confidence_reason"] = "Incorrect translated reason"
@@ -167,7 +172,7 @@ class AnalysisContractTests(unittest.TestCase):
                 )
             ]
         )
-        openai_mock.return_value.chat.completions.create.return_value = provider_response
+        client_mock.return_value.chat.completions.create.return_value = provider_response
 
         translated = translate_analysis_response(analysis, "Persian")
 

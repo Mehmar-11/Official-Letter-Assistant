@@ -1,7 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import CORS_ORIGINS
 from app.routes.analysis import router as analysis_router
+from app.services.llm_service import check_llm_config
 
 app = FastAPI(
     title="Official Letter Assistant API",
@@ -9,16 +11,14 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# ✅ CORS (IMPORTANT for frontend connection)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=list(CORS_ORIGINS),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Routes
 app.include_router(analysis_router)
 
 
@@ -30,3 +30,13 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness_check():
+    if not check_llm_config():
+        raise HTTPException(
+            status_code=503,
+            detail="The language model service is not configured.",
+        )
+    return {"status": "ready"}

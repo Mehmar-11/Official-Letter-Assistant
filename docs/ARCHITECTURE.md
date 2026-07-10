@@ -41,7 +41,7 @@ flowchart TD
 |---|---|
 | React frontend | Upload letters, display structured results, guided follow-up, open chat, reply draft |
 | FastAPI backend | Route requests, coordinate processing, call GPT-4o, validate outputs |
-| Input verification | Reject non-letter content before full analysis |
+| Input verification | Classify non-letter content within the structured analysis call and return a compact rejection response |
 | pdfplumber | Extract text from text-based PDFs |
 | PyMuPDF + GPT-4o Vision | Process scanned PDFs and image uploads |
 | GPT-4o | Letter analysis, OCR, grounded chat, guided follow-up, reply draft, translation |
@@ -83,6 +83,11 @@ flowchart TD
 
 If pdfplumber extracts fewer than 50 characters, the system automatically falls back to GPT-4o Vision OCR — no manual switch needed.
 
+Before document processing, the API verifies the declared file type against
+the file signature. Runtime limits default to 10 MB per upload, 20 PDF pages,
+and 100,000 extracted text characters. These values are configurable through
+environment variables.
+
 ---
 
 ## LLM Integration
@@ -110,6 +115,12 @@ The analysis service then returns one of two public API models:
 input. This keeps the frontend contract small and predictable while preserving
 strict validation inside the backend.
 
+All OpenAI calls use one configured client with a 60-second timeout and one
+retry by default. Analysis, follow-up, chat, and reply generation each have an
+explicit output-token budget. If the provider or API key is not configured,
+the API returns HTTP `503`; no sample analysis, chat answer, or reply draft is
+substituted.
+
 ---
 
 ## Grounding Strategy
@@ -123,6 +134,9 @@ Grounding comes entirely from:
 3. Selected fields passed into follow-up, chat, and reply-draft prompts
 
 The chat system prompt always includes the full letter text and the validated analysis object. The model is instructed not to answer from general knowledge.
+All prompts also treat letter and analysis content as untrusted source data and
+instruct the model not to follow embedded attempts to change its role, rules,
+or output format.
 
 ---
 
@@ -177,6 +191,7 @@ target language. It never guesses the reason from `high`, `medium`, or `low`.
 | `/reply-draft` | POST | Generate one complete formal German reply |
 | `/translate` | POST | Re-translate an existing analysis into a different language |
 | `/health` | GET | Check backend availability |
+| `/ready` | GET | Check whether the LLM provider is configured |
 
 Full request and response schemas are in [API.md](API.md).
 
@@ -187,10 +202,16 @@ Full request and response schemas are in [API.md](API.md).
 | Boundary | Control |
 |---|---|
 | Before analysis | Input verification classifies non-letter content with `is_valid_letter: false` |
+| Before document processing | File size, signature, type, page count, and extracted text length are bounded |
 | After LLM analysis | Pydantic validates the internal model-output schema, including the invalid-letter message |
 | Before the API response | The analysis service returns either `AnalyzeTextResponse` or `InvalidLetterResponse` |
 | After follow-up | Pydantic validates the follow-up response format |
+| Before LLM calls | Provider configuration is required; missing configuration returns HTTP `503` |
 | During chat | Streaming failures are returned as a controlled SSE `error` event |
+
+Allowed browser origins are loaded from `CORS_ORIGINS`. Defaults include the
+local Vite frontend and the deployed Vercel frontend; additional deployment
+origins must be listed explicitly.
 
 ---
 

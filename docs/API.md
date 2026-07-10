@@ -1,6 +1,6 @@
 # API Reference
 
-Letter Assistant exposes seven endpoints. Most endpoints accept and return JSON. `/analyze-pdf` accepts `multipart/form-data`, and `/health` returns a simple JSON status response.
+Letter Assistant exposes eight endpoints. Most endpoints accept and return JSON. `/analyze-pdf` accepts `multipart/form-data`, and the health endpoints return simple JSON status responses.
 
 Base URL (local): `http://localhost:8000`
 
@@ -77,6 +77,7 @@ curl -s -X POST http://localhost:8000/analyze-text \
 |---|---|
 | 422 | Request body missing or malformed |
 | 502 | LLM response failed Pydantic validation |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -87,6 +88,8 @@ Analyzes an uploaded PDF or image file. Accepts text-based PDFs, scanned PDFs, a
 - Text-based PDFs are processed with `pdfplumber`
 - Scanned PDFs and images are processed with GPT-4o Vision
 - If `pdfplumber` extracts fewer than 50 characters, OCR fallback triggers automatically
+- Uploads are limited to 10 MB and PDFs to 20 pages by default
+- Extracted letter text is limited to 100,000 characters by default
 
 ### Request
 
@@ -118,8 +121,10 @@ curl -s -X POST http://localhost:8000/analyze-pdf \
 
 | Code | Reason |
 |---|---|
-| 400 | Unsupported file type, empty file, or unreadable content |
+| 400 | Unsupported, empty, unreadable, or mismatched file content |
+| 413 | File or extracted text exceeds the configured limit |
 | 502 | LLM response failed Pydantic validation |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -178,6 +183,7 @@ curl -s -X POST http://localhost:8000/follow-up \
 |---|---|
 | 422 | Missing or invalid `question_type` |
 | 502 | LLM follow-up response failed Pydantic validation |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -262,6 +268,7 @@ curl -N -X POST http://localhost:8000/chat \
 |---|---|
 | HTTP 400 | Invalid analysis or letter/analysis mismatch |
 | HTTP 422 | Missing fields, malformed request, or latest message is not from the user |
+| HTTP 503 | LLM provider is not configured before streaming starts |
 | `error` event | The provider failed after streaming began |
 
 ---
@@ -317,6 +324,7 @@ curl -s -X POST http://localhost:8000/reply-draft \
 | 400 | Analysis does not represent a valid letter |
 | 422 | Missing fields or unsupported intent |
 | 502 | Reply draft generation failed |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -366,6 +374,7 @@ curl -s -X POST http://localhost:8000/translate \
 |---|---|
 | 422 | Invalid `output_language` value |
 | 502 | Translation request failed |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -386,6 +395,27 @@ Returns backend availability status.
 ```bash
 curl -s http://localhost:8000/health
 ```
+
+---
+
+## GET /ready
+
+Returns `200` only when the configured LLM provider and API key are available
+to the backend process. It does not send a test request to the provider.
+
+### Response
+
+```json
+{
+  "status": "ready"
+}
+```
+
+### Errors
+
+| Code | Reason |
+|---|---|
+| 503 | LLM provider or API key is not configured |
 
 ---
 

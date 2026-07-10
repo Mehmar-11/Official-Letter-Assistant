@@ -27,7 +27,21 @@ Create `backend/.env`:
 LLM_PROVIDER=openai
 OPENAI_API_KEY=your_key_here
 OPENAI_MODEL=gpt-4o
+OPENAI_TIMEOUT_SECONDS=60
+OPENAI_MAX_RETRIES=1
+OPENAI_ANALYSIS_MAX_OUTPUT_TOKENS=3000
+OPENAI_FOLLOWUP_MAX_OUTPUT_TOKENS=1000
+OPENAI_CHAT_MAX_OUTPUT_TOKENS=1000
+OPENAI_REPLY_MAX_OUTPUT_TOKENS=1500
+CORS_ORIGINS=http://localhost:5173,https://official-letter-assistant.vercel.app
+MAX_LETTER_TEXT_CHARS=100000
+MAX_UPLOAD_BYTES=10485760
+MAX_PDF_PAGES=20
 ```
+
+See [`.env.example`](.env.example) for the complete runtime configuration.
+The backend never returns sample LLM content when the provider is missing or
+misconfigured; affected endpoints return HTTP `503` instead.
 
 ---
 
@@ -51,6 +65,7 @@ python3 -m uvicorn app.main:app --reload
 | `/reply-draft` | POST | Generate one complete formal German reply |
 | `/translate` | POST | Re-translate an existing analysis into a different language |
 | `/health` | GET | Check backend availability |
+| `/ready` | GET | Check whether the LLM provider is configured |
 
 All user-facing endpoints accept an optional `output_language` parameter (default: `"English"`). 16 languages supported.
 
@@ -107,3 +122,12 @@ Results saved to `evaluation/results/`. See [../docs/EVALUATION.md](../docs/EVAL
 - Letter content is processed in memory only — no database, no log files
 - Never commit real letters, API keys, or `.env` files
 - Only synthetic letters are used in `sample_letters/`
+
+## Runtime Limits
+
+- Letter text: 100,000 characters by default
+- PDF/JPEG/PNG upload: 10 MB by default
+- PDF length: 20 pages by default
+- OpenAI request timeout: 60 seconds with one retry by default
+
+All limits are configurable through environment variables in `.env.example`.
