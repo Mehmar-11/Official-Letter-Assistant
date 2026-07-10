@@ -2,7 +2,10 @@ import json
 from app.schemas.analysis import AnalyzeTextResponse
 from openai import OpenAI
 from app.services.llm_service import OPENAI_API_KEY, OPENAI_MODEL
-from app.services.analysis_service import get_confidence_reason
+from app.services.analysis_service import (
+    get_confidence_reason,
+    get_confidence_reason_key,
+)
 
 TRANSLATE_PROMPT = """You are given a structured analysis of a German official letter.
 Translate only the user-facing explanatory fields into {output_language}.
@@ -44,14 +47,11 @@ def translate_analysis_response(
     raw = raw.replace("```json", "").replace("```", "").strip()
     translated = json.loads(raw)
 
-    # confidence_reason is backend-generated — use reason_key from original
-    # Map confidence_level back to a safe reason_key
-    level_to_key = {
-        "high": "clear_details",
-        "medium": "payment_incomplete",
-        "low": "text_too_short",
-    }
-    reason_key = level_to_key.get(analysis.confidence_level, "clear_details")
-    translated["confidence_reason"] = get_confidence_reason(reason_key, output_language)
+    reason_key = get_confidence_reason_key(analysis.confidence_reason)
+    if reason_key is not None:
+        translated["confidence_reason"] = get_confidence_reason(
+            reason_key,
+            output_language,
+        )
 
     return AnalyzeTextResponse(**translated)

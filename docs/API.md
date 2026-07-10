@@ -1,6 +1,6 @@
 # API Reference
 
-Letter Assistant exposes six endpoints. Most endpoints accept and return JSON. `/analyze-pdf` accepts `multipart/form-data`, and `/health` returns a simple JSON status response.
+Letter Assistant exposes seven endpoints. Most endpoints accept and return JSON. `/analyze-pdf` accepts `multipart/form-data`, and `/health` returns a simple JSON status response.
 
 Base URL (local): `http://localhost:8000`
 
@@ -57,6 +57,11 @@ Analyzes pasted German letter text and returns a validated structured representa
   "message": "This doesn't look like an official German letter."
 }
 ```
+
+The invalid-letter message is generated in the requested `output_language` and
+validated by the backend before it is returned. The public response remains a
+small two-field object, so the frontend only needs to display `message` when
+`is_valid_letter` is `false`.
 
 ### Example
 
@@ -339,6 +344,10 @@ Same schema as `AnalyzeTextResponse`. The following fields are never translated:
 
 - `sender`, `sender_type`, `urgency_level`, `confidence_level`, `letter_text`
 - Dates, amounts, IBAN, BIC, reference numbers, organization names, legal citations
+
+`confidence_reason` is translated from the actual backend rule that produced the
+current reason. It is not inferred from `confidence_level`, because different
+rules can produce the same level.
 
 ### Example
 

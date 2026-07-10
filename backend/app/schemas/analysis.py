@@ -10,6 +10,36 @@ class AnalyzeTextRequest(BaseModel):
     output_language: OutputLanguage = "English"
 
 
+class LLMAnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_valid_letter: bool
+    message: str
+    letter_involves_payment: bool
+    sender: str
+    sender_type: str
+    urgency_level: str
+    urgency_reason: str
+    letter_topic: str
+    tldr: str
+    useful_details: List[str]
+    deadlines: List[str]
+    required_actions: List[str]
+    required_documents: List[str]
+    payment_information: List[str]
+    possible_consequences: List[str]
+    unclear_or_risky_parts: List[str]
+    safety_note: str
+
+    @model_validator(mode="after")
+    def validate_message(self):
+        if self.is_valid_letter and self.message.strip():
+            raise ValueError("Valid-letter responses must use an empty message.")
+        if not self.is_valid_letter and not self.message.strip():
+            raise ValueError("Invalid-letter responses must include a message.")
+        return self
+
+
 class AnalyzeTextResponse(BaseModel):
     is_valid_letter: bool
     letter_text: str
@@ -84,7 +114,7 @@ class ReplyDraftResponse(BaseModel):
 
 
 class InvalidLetterResponse(BaseModel):
-    is_valid_letter: bool = False
+    is_valid_letter: Literal[False] = False
     message: str
 
 
