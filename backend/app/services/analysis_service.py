@@ -1,5 +1,5 @@
 import re
-from typing import Union
+from typing import Optional, Union
 
 from app.schemas.common import OutputLanguage
 from app.schemas.analysis import AnalyzeTextResponse, InvalidLetterResponse
@@ -139,6 +139,17 @@ def get_confidence_reason(reason_key: str, output_language: OutputLanguage) -> s
     reason_texts = CONFIDENCE_REASON_TEXTS[reason_key]
     return reason_texts.get(output_language, reason_texts["English"])
 
+
+def get_confidence_reason_key(confidence_reason: str) -> Optional[str]:
+    normalized_reason = confidence_reason.strip()
+
+    for reason_key, translations in CONFIDENCE_REASON_TEXTS.items():
+        if normalized_reason in (text.strip() for text in translations.values()):
+            return reason_key
+
+    return None
+
+
 def calculate_reliability(
     llm_result: dict,
     output_language: OutputLanguage = "English",
@@ -225,6 +236,7 @@ def analyze_letter_text(
             )
         )
 
+    llm_result.pop("message", None)
     llm_result["letter_text"] = letter_text
 
     confidence_level, confidence_reason = calculate_reliability(

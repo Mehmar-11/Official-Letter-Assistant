@@ -1,6 +1,6 @@
 # API Reference
 
-Letter Assistant exposes six endpoints. Most endpoints accept and return JSON. `/analyze-pdf` accepts `multipart/form-data`, and `/health` returns a simple JSON status response.
+Letter Assistant exposes eight endpoints. Most endpoints accept and return JSON. `/analyze-pdf` accepts `multipart/form-data`, and the health endpoints return simple JSON status responses.
 
 Base URL (local): `http://localhost:8000`
 
@@ -58,6 +58,11 @@ Analyzes pasted German letter text and returns a validated structured representa
 }
 ```
 
+The invalid-letter message is generated in the requested `output_language` and
+validated by the backend before it is returned. The public response remains a
+small two-field object, so the frontend only needs to display `message` when
+`is_valid_letter` is `false`.
+
 ### Example
 
 ```bash
@@ -72,6 +77,7 @@ curl -s -X POST http://localhost:8000/analyze-text \
 |---|---|
 | 422 | Request body missing or malformed |
 | 502 | LLM response failed Pydantic validation |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -82,6 +88,8 @@ Analyzes an uploaded PDF or image file. Accepts text-based PDFs, scanned PDFs, a
 - Text-based PDFs are processed with `pdfplumber`
 - Scanned PDFs and images are processed with GPT-4o Vision
 - If `pdfplumber` extracts fewer than 50 characters, OCR fallback triggers automatically
+- Uploads are limited to 10 MB and PDFs to 20 pages by default
+- Extracted letter text is limited to 100,000 characters by default
 
 ### Request
 
@@ -113,8 +121,10 @@ curl -s -X POST http://localhost:8000/analyze-pdf \
 
 | Code | Reason |
 |---|---|
-| 400 | Unsupported file type, empty file, or unreadable content |
+| 400 | Unsupported, empty, unreadable, or mismatched file content |
+| 413 | File or extracted text exceeds the configured limit |
 | 502 | LLM response failed Pydantic validation |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -173,24 +183,17 @@ curl -s -X POST http://localhost:8000/follow-up \
 |---|---|
 | 422 | Missing or invalid `question_type` |
 | 502 | LLM follow-up response failed Pydantic validation |
+| 503 | LLM provider is not configured |
 
 ---
 
 ## POST /chat
 
-Handles three interaction modes in a single endpoint: open chat, reply intent selection, and reply draft generation.
+Streams grounded open-chat responses using Server-Sent Events (SSE). The
+endpoint accepts only open-chat requests. Reply drafts use `/reply-draft`.
 
-The chat endpoint is grounded in the uploaded letter text and validated analysis.
-
-Reply drafts are always generated in formal German, regardless of `output_language`.
-
-### Interaction Modes
-
-| Mode | Trigger |
-|---|---|
-| Regular chat | `reply_intent` is `null` |
-| Intent selection | Backend detects a reply request in the message |
-| Reply draft | `reply_intent` is one of the three intent strings |
+The supplied `letter_text` must exactly match `analysis.letter_text`, and the
+analysis must represent a valid letter.
 
 ### Request
 
@@ -202,7 +205,6 @@ Reply drafts are always generated in formal German, regardless of `output_langua
     { "role": "user", "content": "string" },
     { "role": "assistant", "content": "string" }
   ],
-  "reply_intent": "string | null",
   "output_language": "English"
 }
 ```
@@ -211,70 +213,44 @@ Reply drafts are always generated in formal German, regardless of `output_langua
 |---|---|
 | `letter_text` | Full extracted letter text (returned by `/analyze-text` or `/analyze-pdf`) |
 | `analysis` | Full `AnalyzeTextResponse` object |
-| `messages` | Complete conversation history in order |
-| `reply_intent` | One of three intent strings, or `null` for regular chat |
+| `messages` | Conversation history in order. The latest message must be from the user. Maximum 50 messages. |
 | `output_language` | Optional. Language for the chat response. Defaults to `"English"`. |
 
-### Response
+### Response Stream
 
-```json
-{
-  "reply": "string",
-  "ui_action": "show_reply_options | null",
-  "options": ["string"] | null
-}
+The response content type is `text/event-stream`. Each event is one JSON object
+prefixed with `data:` and terminated by a blank line.
+
+```text
+data: {"type":"token","content":"The deadline "}
+
+data: {"type":"token","content":"is 31.07.2026."}
+
+data: {"type":"done"}
 ```
 
-### Mode 1 — Regular Chat Reply
+Event types:
 
-```json
-{
-  "reply": "You need to send three documents: enrollment certificate, proof of health insurance, and proof of financing.",
-  "ui_action": null,
-  "options": null
-}
+| Type | Fields | Meaning |
+|---|---|---|
+| `token` | `content` | Append this text to the current assistant message |
+| `reply_options` | `options` | Show the three localized reply-draft intent options |
+| `done` | none | The stream completed successfully |
+| `error` | `message` | Generation failed after the stream started |
+
+If the user asks for a reply draft, no control token is exposed to the client.
+The stream returns a `reply_options` event followed by `done`.
+
+```text
+data: {"type":"reply_options","options":["already_completed","need_more_time_or_question","disagree"]}
+
+data: {"type":"done"}
 ```
 
-### Mode 2 — Intent Selection
-
-User asks to draft a reply. Backend returns three options for the frontend to display as buttons.
-
-```json
-{
-  "reply": "Sure! What's the purpose of your reply?",
-  "ui_action": "show_reply_options",
-  "options": [
-    "I already took care of it",
-    "I need more time or have a question",
-    "I disagree with this letter"
-  ]
-}
-```
-
-### Mode 3 — Reply Draft
-
-`reply_intent` is set. Backend generates a formal German reply using the validated analysis and the selected intent. Placeholders mark fields the system does not have.
-
-```json
-{
-  "reply": "--- Bitte vor dem Absenden prüfen. Platzhalter in eckigen Klammern ausfüllen. ---\n\n[ORT, DATUM]\n\nSehr geehrte Damen und Herren,\n\nbezugnehmend auf Ihr Schreiben mit dem Aktenzeichen ABC-12345...\n\nMit freundlichen Grüßen\n[IHR VOLLSTÄNDIGER NAME]",
-  "ui_action": null,
-  "options": null
-}
-```
-
-### Reply Intent Values
-
-| Intent | When to use |
-|---|---|
-| `"I already took care of it"` | User has already paid, submitted documents, or completed the required action |
-| `"I need more time or have a question"` | User cannot meet the deadline or needs clarification |
-| `"I disagree with this letter"` | User disputes the amount, decision, or content of the letter |
-
-### Example — Regular Chat
+### Example
 
 ```bash
-curl -s -X POST http://localhost:8000/chat \
+curl -N -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
   -d '{
     "letter_text": "...",
@@ -282,21 +258,62 @@ curl -s -X POST http://localhost:8000/chat \
     "messages": [
       { "role": "user", "content": "What documents do I need to send?" }
     ],
-    "reply_intent": null,
     "output_language": "English"
   }'
 ```
 
-### Example — Reply Draft
+### Errors
+
+| Code or event | Reason |
+|---|---|
+| HTTP 400 | Invalid analysis or letter/analysis mismatch |
+| HTTP 422 | Missing fields, malformed request, or latest message is not from the user |
+| HTTP 503 | LLM provider is not configured before streaming starts |
+| `error` event | The provider failed after streaming began |
+
+---
+
+## POST /reply-draft
+
+Generates one complete formal German reply. This endpoint does not stream.
+The intent must be one of the three supported values.
+
+### Request
+
+```json
+{
+  "analysis": { },
+  "intent": "already_completed"
+}
+```
+
+### Reply Intent Values
+
+| Intent | When to use |
+|---|---|
+| `"already_completed"` | User has already paid, submitted documents, or completed the required action |
+| `"need_more_time_or_question"` | User cannot meet the deadline or needs clarification |
+| `"disagree"` | User disputes the amount, decision, or content of the letter |
+
+The intent values are stable API identifiers. The frontend should display a
+localized label for each identifier.
+
+### Response
+
+```json
+{
+  "reply": "--- Bitte vor dem Absenden prüfen. Platzhalter in eckigen Klammern ausfüllen. ---\n\n[ORT, DATUM]\n\nSehr geehrte Damen und Herren,\n\nbezugnehmend auf Ihr Schreiben...\n\nMit freundlichen Grüßen\n[IHR VOLLSTÄNDIGER NAME]"
+}
+```
+
+### Example
 
 ```bash
-curl -s -X POST http://localhost:8000/chat \
+curl -s -X POST http://localhost:8000/reply-draft \
   -H "Content-Type: application/json" \
   -d '{
-    "letter_text": "...",
     "analysis": { ...full analysis object... },
-    "messages": [],
-    "reply_intent": "I already took care of it"
+    "intent": "already_completed"
   }'
 ```
 
@@ -304,8 +321,10 @@ curl -s -X POST http://localhost:8000/chat \
 
 | Code | Reason |
 |---|---|
-| 422 | Missing required fields or malformed request |
-| 502 | Chat or reply draft generation failed |
+| 400 | Analysis does not represent a valid letter |
+| 422 | Missing fields or unsupported intent |
+| 502 | Reply draft generation failed |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -334,6 +353,10 @@ Same schema as `AnalyzeTextResponse`. The following fields are never translated:
 - `sender`, `sender_type`, `urgency_level`, `confidence_level`, `letter_text`
 - Dates, amounts, IBAN, BIC, reference numbers, organization names, legal citations
 
+`confidence_reason` is translated from the actual backend rule that produced the
+current reason. It is not inferred from `confidence_level`, because different
+rules can produce the same level.
+
 ### Example
 
 ```bash
@@ -351,6 +374,7 @@ curl -s -X POST http://localhost:8000/translate \
 |---|---|
 | 422 | Invalid `output_language` value |
 | 502 | Translation request failed |
+| 503 | LLM provider is not configured |
 
 ---
 
@@ -371,6 +395,27 @@ Returns backend availability status.
 ```bash
 curl -s http://localhost:8000/health
 ```
+
+---
+
+## GET /ready
+
+Returns `200` only when the configured LLM provider and API key are available
+to the backend process. It does not send a test request to the provider.
+
+### Response
+
+```json
+{
+  "status": "ready"
+}
+```
+
+### Errors
+
+| Code | Reason |
+|---|---|
+| 503 | LLM provider or API key is not configured |
 
 ---
 

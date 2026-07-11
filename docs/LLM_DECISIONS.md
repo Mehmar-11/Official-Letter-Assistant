@@ -6,21 +6,23 @@ This document explains why Letter Assistant is designed the way it is. Every dec
 
 ## 1. Structured Outputs with Strict JSON Schema
 
-**Decision**: Use OpenAI's structured output feature with a strict JSON schema derived from the Pydantic model.
+**Decision**: Use OpenAI's structured output feature with a strict JSON schema derived from the internal `LLMAnalysisResponse` Pydantic model.
 
-**Why**: Free-form LLM text output is unpredictable. By enforcing a strict schema at the API call level, the model cannot return malformed JSON, missing fields, or unexpected structures. Pydantic then validates the output a second time before it reaches the frontend. This means the frontend always receives a predictable, typed response — not a string to parse.
+**Why**: Free-form LLM text output is unpredictable. The internal schema validates only fields the model is responsible for generating, including `is_valid_letter` and its user-facing `message`. Backend-owned fields such as the original `letter_text` and rule-based confidence values are added afterward. The analysis service then converts the validated result into one of the public API models: `AnalyzeTextResponse` or `InvalidLetterResponse`.
 
-**Trade-off**: Strict schemas reduce flexibility. Fields that fall outside the schema are discarded. This is intentional — the system only surfaces what it can validate.
+This separation prevents the model schema from drifting away from the prompt while keeping the frontend response predictable and typed.
+
+**Trade-off**: Maintaining separate internal and public models adds a small amount of schema code, but it makes ownership of every field explicit and prevents backend-generated values from being requested from the model.
 
 ---
 
 ## 2. Two-Layer Prompting Architecture
 
-**Decision**: Separate letter analysis (Layer 1) from follow-up interactions (Layer 2). Layer 2 never re-reads the original letter — it only uses the validated output of Layer 1.
+**Decision**: Separate letter analysis (Layer 1) from user interactions (Layer 2). Guided follow-up and reply drafting use selected fields from the validated Layer 1 output. Open chat uses both the original letter and that validated output so it can answer details that do not fit the flat analysis schema.
 
-**Why**: Re-sending the full letter text with every follow-up question is expensive and inconsistent. Once the letter is analyzed and validated, the structured representation is the source of truth. Follow-up prompts receive only the fields relevant to the question type — not the full analysis, and not the original letter.
+**Why**: Re-sending the full letter text for every guided question is expensive and unnecessary. Once the letter is analyzed and validated, focused follow-up prompts receive only the fields relevant to the selected question. Open chat deliberately retains the full letter because its questions are not known in advance.
 
-**Trade-off**: If the structured analysis misses something in Layer 1, Layer 2 cannot recover it. This is acceptable because Layer 1 is designed to be exhaustive, and Layer 2 is explicitly grounded in what was validated.
+**Trade-off**: Guided follow-up and reply drafting cannot recover facts omitted from Layer 1. Open chat can still refer to the original letter, but it remains restricted to that letter and cannot use external knowledge.
 
 ---
 
@@ -49,13 +51,13 @@ This document explains why Letter Assistant is designed the way it is. Every dec
 
 ---
 
-## 5. Letter Verification Before Full Analysis
+## 5. Letter Verification Within Structured Analysis
 
-**Decision**: Before running the full structured analysis, the model classifies whether the input is an official German letter (`is_valid_letter: true / false`).
+**Decision**: The structured analysis prompt first classifies whether the input is an official German letter (`is_valid_letter: true / false`) and then either extracts fields or returns an invalid-letter result in the same model call.
 
-**Why**: Running a full analysis prompt on irrelevant content (shopping receipts, casual messages, random text) wastes API calls and produces meaningless structured output. Input verification is a cheap classification step that protects both cost and output quality. It also makes the system more honest — it explicitly tells the user when the input is not suitable.
+**Why**: Irrelevant content such as receipts, casual messages, or random text should not produce a confident-looking letter analysis. The classification makes the system explicit about unsuitable input and prevents invalid content from entering follow-up, chat, and reply workflows.
 
-**Implementation**: The verification is embedded in the same prompt as the full analysis. If `is_valid_letter` is `false`, the model is instructed to stop and return only a short message — no other fields are populated.
+**Implementation**: The verification is embedded in the same prompt as the full analysis. Because strict structured output requires one stable schema, an invalid result includes `is_valid_letter: false`, a non-empty localized `message`, and empty or neutral values for the remaining model-generated fields. After validation, the analysis service returns only the compact public `InvalidLetterResponse` containing `is_valid_letter` and `message`.
 
 ---
 
@@ -65,7 +67,7 @@ This document explains why Letter Assistant is designed the way it is. Every dec
 
 **Why**: The target users include international residents who may speak Turkish, Arabic, Persian, Hindi, or other languages. Rather than relying on auto-detection from chat messages — which is unreliable when the user writes in a different language than they want the output in — the system accepts an explicit language selection. This gives the frontend full control over which language the analysis, follow-up answers, and chat responses appear in.
 
-**Implementation**: `output_language` is a typed `Literal` field defined in `schemas/common.py`, validated by Pydantic at the request boundary. 16 languages are supported. The prompt instructs the model to return all user-facing explanatory text in the specified language while keeping technical values (IBAN, amounts, reference numbers, dates, organization names, legal citations) unchanged. `confidence_reason` is localized separately via a backend dictionary — it is not generated by the LLM.
+**Implementation**: `output_language` is a typed `Literal` field defined in `schemas/common.py`, validated by Pydantic at the request boundary. 16 languages are supported. The prompt instructs the model to return all user-facing explanatory text in the specified language while keeping technical values (IBAN, amounts, reference numbers, dates, organization names, legal citations) unchanged. `confidence_reason` is localized separately via a backend dictionary — it is not generated by the LLM. The translation flow preserves the exact rule that produced the reason and translates that reason directly; it never maps every result at the same confidence level to one generic explanation.
 
 The `/translate` endpoint takes a full `AnalyzeTextResponse` and a target language, and returns a re-translated response. This enables instant language switching in the frontend without an additional LLM analysis call.
 
@@ -79,7 +81,13 @@ The `/translate` endpoint takes a full `AnalyzeTextResponse` and a target langua
 
 **Why**: Open-ended reply generation is risky for official letters. If the user describes their situation inaccurately or vaguely, the generated reply may be inappropriate or misleading. Three explicit intents ("I already took care of it", "I need more time or have a question", "I disagree with this letter") cover the realistic reasons someone would reply to an official letter, while keeping the system in control of what is generated.
 
-**Implementation**: When `reply_intent` is present, the backend bypasses the chat flow entirely and calls `generate_reply_draft` directly. The draft is always grounded in the validated structured analysis — reference numbers, deadlines, and amounts come from extracted facts, not from LLM inference. Personal details the system does not have are replaced with explicit placeholders.
+**Implementation**: The frontend sends one stable intent identifier
+(`already_completed`, `need_more_time_or_question`, or `disagree`) to the
+dedicated `/reply-draft` endpoint. The frontend owns the localized display
+labels. The draft is returned as one complete JSON response and is always
+grounded in the validated structured analysis — reference numbers, deadlines,
+and amounts come from extracted facts, not from LLM inference. Personal details
+the system does not have are replaced with explicit placeholders.
 
 ---
 
@@ -99,17 +107,37 @@ The `/translate` endpoint takes a full `AnalyzeTextResponse` and a target langua
 
 **Why**: Letter analysis responses (Layer 1) are returned as complete structured JSON — streaming is inappropriate there. Chat responses are conversational and can be long. Streaming delivers tokens to the frontend as they are generated, which reduces perceived latency and makes the interaction feel responsive.
 
-**Trade-off**: Streaming makes error handling more complex. If the model starts a response and then produces an error mid-stream, the frontend has already started rendering. This is managed by collecting the full streamed response before checking for special tokens (`REPLY_DRAFT_REQUESTED`).
+**Trade-off**: Streaming makes error handling more complex. If the model starts
+a response and then produces an error mid-stream, the frontend has already
+started rendering. The backend therefore emits typed SSE events (`token`,
+`reply_options`, `done`, and `error`). It buffers only the short initial prefix
+needed to detect `REPLY_DRAFT_REQUESTED`; ordinary chat content continues to
+stream immediately after that check.
 
 ---
 
 ## 10. Safety and Privacy
 
-**Safety note**: Every structured analysis response includes a fixed disclaimer:
+**Safety note**: Every valid structured analysis response includes a required disclaimer field:
 `"This is AI-generated help, not legal advice. Please verify important decisions with the responsible office or a qualified advisor."`
 
-This note is part of the Pydantic schema — it cannot be omitted by the model.
+This field is required by the Pydantic schema, and the prompt requires its
+content to explain that the output is AI-generated help rather than legal
+advice.
 
 **Privacy**: Letter text and analysis are processed in memory only. No letter content is written to a database, log file, or persistent storage. This is especially important for the target users — official letters often contain personal identification numbers, financial details, and legal references.
 
-**Prompt grounding rules**: The analysis prompt explicitly prohibits the model from inventing information not present in the letter. Rules include: use only the provided letter text, do not assume missing information, do not provide legal advice, and do not guarantee outcomes.
+**Prompt grounding rules**: The prompts explicitly prohibit the model from inventing information not present in the letter. Rules include: use only the provided letter or structured analysis, do not assume missing information, do not provide legal advice, and do not guarantee outcomes. Letter text and structured analysis are treated as untrusted source data; embedded instructions that attempt to change the model's role, rules, or output format must be ignored.
+
+---
+
+## 11. Bounded Calls and No Synthetic Production Fallback
+
+**Decision**: All OpenAI calls use configurable timeout and retry settings, and
+analysis, follow-up, chat, and reply generation have explicit output-token
+budgets. Missing or placeholder API credentials produce HTTP `503` instead of
+sample content.
+
+**Why**: Bounded calls reduce runaway latency and cost. Explicit failure is
+also essential for trust: a generic or sample answer must never appear to be an
+analysis of the user's real letter.

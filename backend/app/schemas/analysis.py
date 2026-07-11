@@ -1,68 +1,152 @@
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.config import MAX_LETTER_TEXT_CHARS
 from app.schemas.common import OutputLanguage
 
 
+AnalysisText = Annotated[str, Field(max_length=10_000)]
+AnalysisListItem = Annotated[str, Field(max_length=5_000)]
+AnalysisList = Annotated[List[AnalysisListItem], Field(max_length=50)]
+SenderType = Literal[
+    "Public office",
+    "University",
+    "Insurance",
+    "Bank",
+    "Employer",
+    "Other",
+    "Unknown",
+]
+UrgencyLevel = Literal["High", "Medium", "Low"]
+ConfidenceLevel = Literal["high", "medium", "low"]
+
+
 class AnalyzeTextRequest(BaseModel):
-    letter_text: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    letter_text: str = Field(min_length=1, max_length=MAX_LETTER_TEXT_CHARS)
     output_language: OutputLanguage = "English"
 
 
-class AnalyzeTextResponse(BaseModel):
+class LLMAnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     is_valid_letter: bool
-    letter_text: str
-    confidence_level: str
-    confidence_reason: str
+    message: AnalysisText
     letter_involves_payment: bool
-    sender: str
-    sender_type: str
-    urgency_level: str
-    urgency_reason: str
-    letter_topic: str
-    tldr: str
-    useful_details: List[str]
-    deadlines: List[str]
-    required_actions: List[str]
-    required_documents: List[str]
-    payment_information: List[str]
-    possible_consequences: List[str]
-    unclear_or_risky_parts: List[str]
-    safety_note: str
+    sender: AnalysisText
+    sender_type: SenderType
+    urgency_level: UrgencyLevel
+    urgency_reason: AnalysisText
+    letter_topic: AnalysisText
+    tldr: AnalysisText
+    useful_details: AnalysisList
+    deadlines: AnalysisList
+    required_actions: AnalysisList
+    required_documents: AnalysisList
+    payment_information: AnalysisList
+    possible_consequences: AnalysisList
+    unclear_or_risky_parts: AnalysisList
+    safety_note: AnalysisText
+
+    @model_validator(mode="after")
+    def validate_message(self):
+        if self.is_valid_letter and self.message.strip():
+            raise ValueError("Valid-letter responses must use an empty message.")
+        if not self.is_valid_letter and not self.message.strip():
+            raise ValueError("Invalid-letter responses must include a message.")
+        return self
+
+
+class AnalyzeTextResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_valid_letter: bool
+    letter_text: str = Field(min_length=1, max_length=MAX_LETTER_TEXT_CHARS)
+    confidence_level: ConfidenceLevel
+    confidence_reason: AnalysisText
+    letter_involves_payment: bool
+    sender: AnalysisText
+    sender_type: SenderType
+    urgency_level: UrgencyLevel
+    urgency_reason: AnalysisText
+    letter_topic: AnalysisText
+    tldr: AnalysisText
+    useful_details: AnalysisList
+    deadlines: AnalysisList
+    required_actions: AnalysisList
+    required_documents: AnalysisList
+    payment_information: AnalysisList
+    possible_consequences: AnalysisList
+    unclear_or_risky_parts: AnalysisList
+    safety_note: AnalysisText
 
 
 class FollowUpRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     analysis: AnalyzeTextResponse
     question_type: Literal["payment", "documents", "consequences", "careful"]
     output_language: OutputLanguage = "English"
 
 
 class FollowUpResponse(BaseModel):
-    summary: str
-    details: List[str]
+    model_config = ConfigDict(extra="forbid")
+
+    summary: AnalysisText
+    details: List[AnalysisListItem] = Field(max_length=5)
+
 
 class ChatMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
     role: Literal["user", "assistant"]
-    content: str
+    content: str = Field(min_length=1, max_length=10_000)
 
 
 class ChatRequest(BaseModel):
-    letter_text: str
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    letter_text: str = Field(min_length=1, max_length=MAX_LETTER_TEXT_CHARS)
     analysis: AnalyzeTextResponse
-    messages: List[ChatMessage]
-    reply_intent: Optional[str] = None
+    messages: List[ChatMessage] = Field(min_length=1, max_length=50)
     output_language: OutputLanguage = "English"
 
-class ChatResponse(BaseModel):
-    reply: str
-    ui_action: Optional[str] = None
-    options: Optional[List[str]] = None
+    @model_validator(mode="after")
+    def require_latest_user_message(self):
+        if self.messages[-1].role != "user":
+            raise ValueError("The latest chat message must be from the user.")
+        return self
+
+
+ReplyIntent = Literal[
+    "already_completed",
+    "need_more_time_or_question",
+    "disagree",
+]
+
+
+class ReplyDraftRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    analysis: AnalyzeTextResponse
+    intent: ReplyIntent
+
+
+class ReplyDraftResponse(BaseModel):
+    reply: str = Field(min_length=1, max_length=10_000)
+
 
 class InvalidLetterResponse(BaseModel):
-    is_valid_letter: bool = False
-    message: str
-    
+    model_config = ConfigDict(extra="forbid")
+
+    is_valid_letter: Literal[False] = False
+    message: str = Field(min_length=1, max_length=2_000)
+
+
 class TranslateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     analysis: AnalyzeTextResponse
     output_language: OutputLanguage = "English"

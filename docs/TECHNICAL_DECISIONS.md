@@ -92,6 +92,54 @@ This document records engineering and product decisions that shaped the Letter A
 - Real letters are never committed to the repository; only synthetic letters are used for development and evaluation
 - API keys are stored in `.env` and excluded from version control
 - Translation operates on the validated structured analysis rather than re-processing the original letter, reducing unnecessary LLM work and keeping translated outputs consistent with the original analysis
-- Every analysis response includes a fixed safety note that cannot be omitted by the model
+- Every valid analysis response includes a required safety-note field, and the prompt specifies its disclaimer content
 
 **Why**: Official German letters routinely contain personal identification numbers, financial details, immigration status, and legal references. These constraints are not optional — they are requirements for responsible handling of sensitive documents.
+
+---
+
+## 9. Production-Safe LLM Configuration
+
+**Decision**: Missing or placeholder provider credentials never trigger sample
+analysis, chat, follow-up, OCR, or reply content. LLM endpoints return HTTP
+`503` until valid configuration is available. `/health` remains a liveness
+check, while `/ready` reports whether the configured provider can be used.
+
+**Why**: A plausible sample response is more dangerous than an explicit error
+for an application that explains deadlines, payments, and official actions.
+Users must never mistake development data for facts extracted from their own
+letter.
+
+**Operational controls**: One shared OpenAI client applies configurable timeout
+and retry settings. Each generated response type also has a bounded output-token
+budget to limit latency and cost.
+
+---
+
+## 10. Bounded and Verified Input
+
+**Decision**: Pasted text, uploaded file size, PDF page count, extracted text,
+analysis fields, list lengths, chat history, and individual chat messages all
+have explicit limits. PDF, JPEG, and PNG uploads must also match their declared
+file signature.
+
+**Why**: The backend receives analysis data back from the browser for chat,
+translation, follow-up, and reply generation. Bounding both the original letter
+and the returned structured data prevents accidental or manipulated requests
+from creating excessively large prompts or document-processing workloads.
+
+**Trade-off**: Very large or unusually long documents are rejected with a
+controlled validation or HTTP `413` response instead of being partially
+processed.
+
+---
+
+## 11. Explicit Browser Origins
+
+**Decision**: Browser access is restricted to the comma-separated
+`CORS_ORIGINS` environment variable. Defaults cover the local Vite URL and the
+deployed Vercel URL.
+
+**Why**: Deployment URLs differ from local development URLs. Environment-based
+origins keep this operational detail out of route code while avoiding an open
+wildcard policy.

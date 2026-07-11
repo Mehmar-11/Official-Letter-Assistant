@@ -69,6 +69,17 @@ accounts or authenticated multi-user sessions. In a shared deployment,
 letter isolation relies on the stateless nature of the API rather than
 application-level access controls.
 
+### Operational Limits
+
+The backend intentionally rejects inputs above its configured limits. Defaults
+are 100,000 characters of letter text, 10 MB per PDF/JPEG/PNG upload, and 20 PDF
+pages. These controls protect processing time and model cost, but unusually long
+letters or large scanned documents must be reduced before analysis.
+
+The `/ready` endpoint verifies provider configuration only. It does not make a
+live request to OpenAI, so a temporary provider outage can still occur after a
+successful readiness check.
+
 ------------------------------------------------------------------------
 
 ## Future Improvements
@@ -103,9 +114,11 @@ and reply quality.
 
 ### Deployment Improvements
 
-Add user authentication and session isolation for multi-user
-deployments. Implement rate limiting to prevent API abuse. Add a
-feedback mechanism so users can flag incorrect analyses.
+Add user authentication and session isolation for multi-user deployments.
+Input limits, explicit CORS origins, provider readiness checks, and bounded LLM
+calls are already implemented, but distributed rate limiting and production
+monitoring are still needed. Add a feedback mechanism so users can flag
+incorrect analyses.
 
 ### User Experience Improvements
 
@@ -138,6 +151,6 @@ planned as short-term additions:
     or postal APIs is outside scope.
 -   **Multi-document analysis**: The system analyzes one letter at a
     time. Cross-referencing multiple related documents is not supported.
--   **Production deployment**: High-availability infrastructure,
+-   **Production-grade operations**: High-availability infrastructure,
     monitoring, logging, and enterprise security features are outside
     the scope of this academic project.
