@@ -11,8 +11,11 @@ from app.services.analysis_service import (
     CONFIDENCE_REASON_TEXTS,
     analyze_letter_text,
     get_confidence_reason,
+    validate_grounded_dates,
 )
 from app.services.llm_service import (
+    build_letter_analysis_prompt,
+    extract_calendar_dates,
     get_analysis_response_schema,
     parse_and_validate_llm_response,
 )
@@ -70,6 +73,37 @@ def build_analysis(**overrides):
 
 
 class AnalysisContractTests(unittest.TestCase):
+    def test_source_dates_are_normalized_and_added_to_the_prompt(self):
+        letter_text = "Zahlen Sie bis 30.08.2026. Exmatrikulation am 30.09.2026."
+
+        self.assertEqual(
+            extract_calendar_dates(letter_text),
+            {"2026-08-30", "2026-09-30"},
+        )
+        prompt = build_letter_analysis_prompt(letter_text, "English")
+        self.assertIn("2026-08-30, 2026-09-30", prompt)
+        self.assertIn("Every exact calendar date", prompt)
+
+    def test_analysis_rejects_a_date_not_present_in_the_letter(self):
+        letter_text = "Bitte zahlen Sie bis 30.08.2026."
+        result = build_llm_payload(
+            tldr="Pay by June 30, 2026.",
+            deadlines=["Payment is due by 2026-06-30"],
+        )
+
+        with self.assertRaisesRegex(ValueError, "2026-06-30"):
+            validate_grounded_dates(letter_text, result)
+
+    def test_analysis_accepts_dates_present_in_the_letter(self):
+        letter_text = "Zahlen Sie bis 30.08.2026. Folge ab 30.09.2026."
+        result = build_llm_payload(
+            tldr="Pay by August 30, 2026.",
+            deadlines=["Payment is due by 2026-08-30"],
+            possible_consequences=["Exmatriculation on 2026-09-30"],
+        )
+
+        validate_grounded_dates(letter_text, result)
+
     def test_model_schema_matches_only_model_generated_fields(self):
         schema = get_analysis_response_schema()
         properties = schema["properties"]
@@ -175,6 +209,12 @@ class AnalysisContractTests(unittest.TestCase):
         client_mock.return_value.chat.completions.create.return_value = provider_response
 
         translated = translate_analysis_response(analysis, "Persian")
+
+        prompt = client_mock.return_value.chat.completions.create.call_args.kwargs[
+            "messages"
+        ][0]["content"]
+        self.assertIn("natural administrative meaning", prompt)
+        self.assertIn("مدارک درخواستی", prompt)
 
         self.assertEqual(
             translated.confidence_reason,

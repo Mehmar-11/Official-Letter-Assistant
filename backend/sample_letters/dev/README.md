@@ -45,5 +45,6 @@ When testing these samples, we check whether the system:
 
 ## Status
 
-These samples are for development and prompt refinement.  
+These samples are for development and prompt refinement.
+
 Demo and evaluation / hold-out samples are kept separate.

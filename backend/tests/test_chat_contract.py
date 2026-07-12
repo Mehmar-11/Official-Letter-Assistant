@@ -152,6 +152,7 @@ class ChatContractTests(unittest.TestCase):
         request = ReplyDraftRequest(
             analysis=build_analysis(),
             intent="need_more_time_or_question",
+            additional_context="Please ask for an extension until 31 July.",
         )
 
         response = reply_draft(request)
@@ -160,6 +161,7 @@ class ChatContractTests(unittest.TestCase):
         draft_mock.assert_called_once_with(
             analysis=build_analysis().model_dump(),
             intent="I need more time or have a question",
+            additional_context="Please ask for an extension until 31 July.",
         )
 
     def test_reply_draft_rejects_unknown_intent(self):
@@ -167,6 +169,14 @@ class ChatContractTests(unittest.TestCase):
             ReplyDraftRequest(
                 analysis=build_analysis(),
                 intent="Invent a legal argument",
+            )
+
+    def test_reply_draft_rejects_oversized_additional_context(self):
+        with self.assertRaises(ValidationError):
+            ReplyDraftRequest(
+                analysis=build_analysis(),
+                intent="disagree",
+                additional_context="x" * 1_001,
             )
 
 

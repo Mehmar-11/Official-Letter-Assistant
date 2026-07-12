@@ -1,10 +1,41 @@
 import { useState, useEffect, useRef } from "react";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import {
+  AlertTriangle,
+  Bot,
+  CalendarClock,
+  Clipboard,
+  Copy,
+  CreditCard,
+  Download,
+  FileText,
+  Info,
+  History,
+  LockKeyhole,
+  Mail,
+  MessageSquare,
+  Moon,
+  RefreshCw,
+  RotateCcw,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  Tag,
+  Trash2,
+  Type,
+  Upload,
+  X,
+} from "lucide-react";
+import {
+  analyzeFile,
+  analyzeText,
+  generateReplyDraft as requestReplyDraft,
+  streamChat,
+  translateAnalysis,
+} from "../api/letterAssistantApi.js";
+import { getUserErrorMessage } from "../api/errorMessages.js";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
-// ========== COMPLETE TRANSLATIONS FOR ALL 15 LANGUAGES ==========
+// ========== COMPLETE TRANSLATIONS FOR ALL 16 LANGUAGES ==========
 const UI_LABELS = {
   English: {
     copy: "📋 Copy",
@@ -14,7 +45,7 @@ const UI_LABELS = {
     chatSub: "Ask anything about this letter",
     placeholder: "Ask anything about this letter...",
     suggestions: ["Help me draft a reply", "What should I do first?", "Is this urgent?", "Explain in simpler words"],
-    welcome: "Hey! I've read your letter. Ask me anything — I'll keep it simple. 👋",
+    welcome: "I have read your letter. Ask a question about its content, deadlines, payments, or next steps.",
     aboutTitle: "ℹ️ German Letter Assistant",
     aboutFeatures: "Features: OCR, Smart Chat with Streaming, Reply Draft Assistant, Multi-language Output",
     aboutPrivacy: "Privacy: Your documents are processed temporarily and not stored.",
@@ -37,7 +68,7 @@ const UI_LABELS = {
     dropText: "Click to upload PDF or image",
     dropSubtext: "or drag and drop",
     analyzeBtn: "✨ Analyze Letter",
-    privacy: "Your data is private — nothing is stored",
+    privacy: "No server or persistent browser storage",
     processing: "Processing your letter...",
     accordionWhat: "What to do",
     accordionPay: "How to pay",
@@ -69,6 +100,9 @@ const UI_LABELS = {
     whatHappensIfIgnore: "What happens if you ignore this",
     thingsToBeCareful: "Things to be careful about",
     analyzeFirst: "📄 Analyze a letter first to start chatting...",
+    letterPlaceholder: "Paste your official German letter here...",
+    analyzing: "Analyzing...",
+    replyPrompt: "How would you like me to write the reply?",
   },
   German: {
     copy: "📋 Kopieren",
@@ -78,7 +112,7 @@ const UI_LABELS = {
     chatSub: "Fragen Sie alles zu diesem Brief",
     placeholder: "Fragen Sie alles zu diesem Brief...",
     suggestions: ["Hilf mir einen Antwortentwurf zu erstellen", "Was soll ich zuerst tun?", "Ist das dringend?", "In einfacheren Worten erklären"],
-    welcome: "Hallo! Ich habe Ihren Brief gelesen. Fragen Sie mich alles — ich halte es einfach. 👋",
+    welcome: "Ich habe Ihren Brief gelesen. Fragen Sie nach Inhalt, Fristen, Zahlungen oder den nächsten Schritten.",
     aboutTitle: "ℹ️ German Letter Assistant",
     aboutFeatures: "Funktionen: OCR, Smart Chat mit Streaming, Antwortentwurf-Assistent, Mehrsprachige Ausgabe",
     aboutPrivacy: "Datenschutz: Ihre Dokumente werden vorübergehend verarbeitet und nicht gespeichert.",
@@ -101,7 +135,7 @@ const UI_LABELS = {
     dropText: "Klicken Sie hier, um PDF oder Bild hochzuladen",
     dropSubtext: "oder per Drag & Drop",
     analyzeBtn: "✨ Brief analysieren",
-    privacy: "Ihre Daten sind privat — nichts wird gespeichert",
+    privacy: "Keine Server- oder dauerhafte Browser-Speicherung",
     processing: "Verarbeite Ihren Brief...",
     accordionWhat: "Was Sie tun müssen",
     accordionPay: "Wie Sie bezahlen",
@@ -133,6 +167,9 @@ const UI_LABELS = {
     whatHappensIfIgnore: "Was passiert, wenn Sie dies ignorieren",
     thingsToBeCareful: "Worauf Sie achten sollten",
     analyzeFirst: "📄 Analysieren Sie zuerst einen Brief, um mit dem Chatten zu beginnen...",
+    letterPlaceholder: "Fügen Sie Ihren offiziellen deutschen Brief hier ein...",
+    analyzing: "Wird analysiert...",
+    replyPrompt: "Wie soll ich die Antwort formulieren?",
   },
   Turkish: {
     copy: "📋 Kopyala",
@@ -902,6 +939,73 @@ const UI_LABELS = {
     thingsToBeCareful: "주의해야 할 사항",
     analyzeFirst: "📄 채팅을 시작하려면 먼저 편지를 분석하세요...",
   },
+  Persian: {
+    copy: "📋 کپی",
+    pdf: "📄 پی‌دی‌اف",
+    new: "🔄 نامه جدید",
+    chatTitle: "💬 گفت‌وگو با دستیار",
+    chatSub: "درباره این نامه هر سؤالی دارید بپرسید",
+    placeholder: "سؤال خود را درباره این نامه بنویسید...",
+    suggestions: ["برای نوشتن پاسخ کمکم کن", "اول چه کاری انجام دهم؟", "آیا این نامه فوری است؟", "ساده‌تر توضیح بده"],
+    welcome: "سلام! نامه شما را خوانده‌ام. هر سؤالی دارید بپرسید؛ ساده توضیح می‌دهم.",
+    aboutTitle: "دستیار نامه‌های رسمی آلمانی",
+    aboutFeatures: "قابلیت‌ها: خواندن تصویر و پی‌دی‌اف، تحلیل نامه، گفت‌وگوی جریانی، پیش‌نویس پاسخ و خروجی چندزبانه",
+    aboutPrivacy: "حریم خصوصی: سند شما موقت پردازش می‌شود و ذخیره نمی‌شود.",
+    aboutDisclaimer: "توجه: این راهنمایی با هوش مصنوعی تولید شده و مشاوره حقوقی نیست.",
+    close: "بستن",
+    emptyTitle: "هنوز نامه‌ای تحلیل نشده است",
+    emptySub: "متن نامه را وارد کنید یا فایل آن را بارگذاری کنید",
+    bottomLine: "✨ خلاصه اصلی",
+    bridgeText: "📖 نامه شما را خوانده‌ام. نکته‌ای نامفهوم است؟",
+    bridgeAsk: "در پایین بپرسید ↓",
+    urgency: "فوریت",
+    paymentInvolved: "💳 شامل پرداخت",
+    quality: "✓ کیفیت تحلیل:",
+    additionalDetails: "📌 جزئیات بیشتر",
+    safety: "🛡️",
+    back: "بازگشت ←",
+    about: "درباره",
+    pasteText: "📄 وارد کردن متن",
+    upload: "📑 بارگذاری پی‌دی‌اف یا تصویر",
+    dropText: "برای بارگذاری پی‌دی‌اف یا تصویر کلیک کنید",
+    dropSubtext: "یا فایل را اینجا رها کنید",
+    analyzeBtn: "✨ تحلیل نامه",
+    privacy: "بدون ذخیره‌سازی روی سرور یا حافظهٔ دائمی مرورگر",
+    processing: "در حال پردازش نامه...",
+    accordionWhat: "چه کاری باید انجام دهید",
+    accordionPay: "روش پرداخت",
+    accordionDocs: "مدارک موردنیاز",
+    accordionCons: "پیامدهای نادیده گرفتن نامه",
+    accordionCareful: "نکات مهم و موارد احتیاط",
+    from: "فرستنده",
+    whatToDo: "کارهای لازم",
+    deadline: "مهلت",
+    consequences: "پیامدهای احتمالی",
+    draftReply: "پیش‌نویس پاسخ",
+    basedOn: "بر اساس نامه تحلیل‌شده:",
+    actionsNeeded: "اقدامات لازم",
+    payment: "اطلاعات پرداخت",
+    uploadTitle: "نامه شما",
+    lettersAnalyzed: "نامه تحلیل شد",
+    lettersAnalyzedPlural: "نامه تحلیل شد",
+    copied: "✅ کپی شد",
+    actBefore: "پیش از این تاریخ اقدام کنید.",
+    analysisResult: "نتیجه تحلیل",
+    brandName: "دستیار نامه‌های آلمانی",
+    daysLeft: "روز تا پایان مهلت",
+    mayNotBeOfficial: "⚠️ احتمالاً نامه رسمی نیست",
+    typeMessage: "پیام خود را بنویسید...",
+    send: "ارسال",
+    translating: "در حال ترجمه...",
+    howToPay: "روش پرداخت",
+    documentsNeeded: "مدارک موردنیاز",
+    whatHappensIfIgnore: "پیامدهای نادیده گرفتن نامه",
+    thingsToBeCareful: "نکات مهم",
+    analyzeFirst: "📄 ابتدا یک نامه را تحلیل کنید...",
+    letterPlaceholder: "متن نامه رسمی آلمانی را اینجا وارد کنید...",
+    analyzing: "در حال تحلیل...",
+    replyPrompt: "پاسخ را با کدام هدف بنویسم؟",
+  },
   Chinese: {
     copy: "📋 复制",
     pdf: "📄 PDF",
@@ -985,12 +1089,210 @@ const LANGUAGE_NAMES = {
   Japanese: "🇯🇵 日本語",
   Korean: "🇰🇷 한국어",
   Chinese: "🇨🇳 中文",
+  Persian: "🇮🇷 فارسی",
 };
 
-export default function Dashboard({ onBack }) {
+const LEVEL_LABELS = {
+  English: { high: "High", medium: "Medium", low: "Low" },
+  German: { high: "Hoch", medium: "Mittel", low: "Niedrig" },
+  Turkish: { high: "Yüksek", medium: "Orta", low: "Düşük" },
+  Arabic: { high: "مرتفع", medium: "متوسط", low: "منخفض" },
+  Hindi: { high: "उच्च", medium: "मध्यम", low: "कम" },
+  French: { high: "Élevé", medium: "Moyen", low: "Faible" },
+  Spanish: { high: "Alta", medium: "Media", low: "Baja" },
+  Italian: { high: "Alta", medium: "Media", low: "Bassa" },
+  Portuguese: { high: "Alta", medium: "Média", low: "Baixa" },
+  Dutch: { high: "Hoog", medium: "Gemiddeld", low: "Laag" },
+  Polish: { high: "Wysoki", medium: "Średni", low: "Niski" },
+  Russian: { high: "Высокий", medium: "Средний", low: "Низкий" },
+  Japanese: { high: "高", medium: "中", low: "低" },
+  Korean: { high: "높음", medium: "보통", low: "낮음" },
+  Chinese: { high: "高", medium: "中", low: "低" },
+  Persian: { high: "زیاد", medium: "متوسط", low: "کم" },
+};
+
+const REPLY_OPTION_LABELS = {
+  already_completed: {
+    English: "I already completed it", German: "Ich habe es bereits erledigt", Turkish: "Bunu zaten yaptım",
+    Arabic: "لقد أكملت ذلك بالفعل", Hindi: "मैंने इसे पहले ही पूरा कर लिया है", French: "Je l’ai déjà fait",
+    Spanish: "Ya lo hice", Italian: "L’ho già fatto", Portuguese: "Já concluí",
+    Dutch: "Ik heb het al gedaan", Polish: "Już to zrobiłem", Russian: "Я уже это сделал",
+    Japanese: "すでに完了しました", Korean: "이미 완료했습니다", Chinese: "我已经完成了",
+    Persian: "قبلاً انجامش داده‌ام",
+  },
+  need_more_time_or_question: {
+    English: "I need more time or have a question", German: "Ich brauche mehr Zeit oder habe eine Frage",
+    Turkish: "Daha fazla zamana ihtiyacım var veya bir sorum var", Arabic: "أحتاج إلى مزيد من الوقت أو لدي سؤال",
+    Hindi: "मुझे अधिक समय चाहिए या मेरा एक प्रश्न है", French: "J’ai besoin de plus de temps ou j’ai une question",
+    Spanish: "Necesito más tiempo o tengo una pregunta", Italian: "Mi serve più tempo o ho una domanda",
+    Portuguese: "Preciso de mais tempo ou tenho uma pergunta", Dutch: "Ik heb meer tijd nodig of heb een vraag",
+    Polish: "Potrzebuję więcej czasu lub mam pytanie", Russian: "Мне нужно больше времени или у меня есть вопрос",
+    Japanese: "もう少し時間が必要、または質問があります", Korean: "시간이 더 필요하거나 질문이 있습니다",
+    Chinese: "我需要更多时间或有一个问题", Persian: "زمان بیشتری می‌خواهم یا سؤال دارم",
+  },
+  disagree: {
+    English: "I disagree", German: "Ich bin nicht einverstanden", Turkish: "Katılmıyorum",
+    Arabic: "أنا لا أوافق", Hindi: "मैं सहमत नहीं हूँ", French: "Je ne suis pas d’accord",
+    Spanish: "No estoy de acuerdo", Italian: "Non sono d’accordo", Portuguese: "Não concordo",
+    Dutch: "Ik ben het er niet mee eens", Polish: "Nie zgadzam się", Russian: "Я не согласен",
+    Japanese: "同意しません", Korean: "동의하지 않습니다", Chinese: "我不同意", Persian: "با این موضوع موافق نیستم",
+  },
+};
+
+const REPLY_DRAFT_UI = {
+  English: {
+    detailsLabel: "Add details (optional)",
+    detailsPlaceholder: "For example: request two more weeks, add your question, or explain what you disagree with.",
+    generate: "Generate formal reply",
+    generating: "Generating formal reply...",
+    cancel: "Cancel",
+    draftLabel: "Editable German reply draft",
+    editHint: "Review and edit this draft before sending it.",
+    copy: "Copy draft",
+    copied: "Copied",
+    regenerate: "Generate another",
+  },
+  German: {
+    detailsLabel: "Details hinzufügen (optional)",
+    detailsPlaceholder: "Zum Beispiel: zwei Wochen mehr Zeit beantragen, Ihre Frage ergänzen oder Ihren Widerspruch erklären.",
+    generate: "Formelle Antwort erstellen",
+    generating: "Formelle Antwort wird erstellt...",
+    cancel: "Abbrechen",
+    draftLabel: "Bearbeitbarer deutscher Antwortentwurf",
+    editHint: "Prüfen und bearbeiten Sie den Entwurf vor dem Absenden.",
+    copy: "Entwurf kopieren",
+    copied: "Kopiert",
+    regenerate: "Neu erstellen",
+  },
+  Persian: {
+    detailsLabel: "افزودن جزئیات (اختیاری)",
+    detailsPlaceholder: "مثلاً درخواست دو هفته زمان بیشتر، نوشتن سؤال یا توضیح درباره دلیل مخالفت.",
+    generate: "ساخت پاسخ رسمی",
+    generating: "در حال ساخت پاسخ رسمی...",
+    cancel: "انصراف",
+    draftLabel: "پیش‌نویس قابل‌ویرایش آلمانی",
+    editHint: "پیش از ارسال، متن را بررسی و ویرایش کنید.",
+    copy: "کپی پیش‌نویس",
+    copied: "کپی شد",
+    regenerate: "ساخت دوباره",
+  },
+};
+
+const HISTORY_UI = {
+  English: {
+    title: "Recent letters",
+    current: "Current",
+    clear: "Clear history",
+    remove: "Remove letter",
+    privacy: "Kept only until this tab is closed",
+    empty: "No letters yet",
+  },
+  German: {
+    title: "Letzte Briefe",
+    current: "Aktuell",
+    clear: "Verlauf löschen",
+    remove: "Brief entfernen",
+    privacy: "Nur gespeichert, bis dieser Tab geschlossen wird",
+    empty: "Noch keine Briefe",
+  },
+  Persian: {
+    title: "نامه‌های اخیر",
+    current: "فعال",
+    clear: "پاک‌کردن تاریخچه",
+    remove: "حذف نامه",
+    privacy: "فقط تا زمان بسته‌شدن این تب نگه داشته می‌شود",
+    empty: "هنوز نامه‌ای بررسی نشده است",
+  },
+  Turkish: {
+    title: "Son mektuplar", current: "Geçerli", clear: "Geçmişi temizle",
+    remove: "Mektubu kaldır", privacy: "Yalnızca bu sekme kapanana kadar saklanır", empty: "Henüz mektup yok",
+  },
+  Arabic: {
+    title: "الرسائل الأخيرة", current: "الحالية", clear: "مسح السجل",
+    remove: "إزالة الرسالة", privacy: "تُحفظ فقط حتى إغلاق علامة التبويب", empty: "لا توجد رسائل بعد",
+  },
+  Hindi: {
+    title: "हाल के पत्र", current: "वर्तमान", clear: "इतिहास साफ़ करें",
+    remove: "पत्र हटाएँ", privacy: "केवल इस टैब के बंद होने तक रखा जाता है", empty: "अभी कोई पत्र नहीं है",
+  },
+  French: {
+    title: "Lettres récentes", current: "Actuelle", clear: "Effacer l’historique",
+    remove: "Supprimer la lettre", privacy: "Conservé uniquement jusqu’à la fermeture de cet onglet", empty: "Aucune lettre pour le moment",
+  },
+  Spanish: {
+    title: "Cartas recientes", current: "Actual", clear: "Borrar historial",
+    remove: "Eliminar carta", privacy: "Se conserva solo hasta cerrar esta pestaña", empty: "Todavía no hay cartas",
+  },
+  Italian: {
+    title: "Lettere recenti", current: "Attuale", clear: "Cancella cronologia",
+    remove: "Rimuovi lettera", privacy: "Conservato solo fino alla chiusura di questa scheda", empty: "Nessuna lettera al momento",
+  },
+  Portuguese: {
+    title: "Cartas recentes", current: "Atual", clear: "Limpar histórico",
+    remove: "Remover carta", privacy: "Mantido apenas até esta aba ser fechada", empty: "Ainda não há cartas",
+  },
+  Dutch: {
+    title: "Recente brieven", current: "Huidig", clear: "Geschiedenis wissen",
+    remove: "Brief verwijderen", privacy: "Alleen bewaard totdat dit tabblad wordt gesloten", empty: "Nog geen brieven",
+  },
+  Polish: {
+    title: "Ostatnie pisma", current: "Bieżące", clear: "Wyczyść historię",
+    remove: "Usuń pismo", privacy: "Przechowywane tylko do zamknięcia tej karty", empty: "Nie ma jeszcze pism",
+  },
+  Russian: {
+    title: "Недавние письма", current: "Текущее", clear: "Очистить историю",
+    remove: "Удалить письмо", privacy: "Хранится только до закрытия этой вкладки", empty: "Писем пока нет",
+  },
+  Japanese: {
+    title: "最近の手紙", current: "表示中", clear: "履歴を消去",
+    remove: "手紙を削除", privacy: "このタブを閉じるまでのみ保持されます", empty: "手紙はまだありません",
+  },
+  Korean: {
+    title: "최근 편지", current: "현재", clear: "기록 지우기",
+    remove: "편지 삭제", privacy: "이 탭을 닫을 때까지만 보관됩니다", empty: "아직 편지가 없습니다",
+  },
+  Chinese: {
+    title: "最近的信件", current: "当前", clear: "清除历史记录",
+    remove: "删除信件", privacy: "仅保留到关闭此标签页", empty: "暂无信件",
+  },
+};
+
+const ABOUT_UI = {
+  English: {
+    description: "German Letter Assistant turns complex official letters into clear actions, deadlines, payment details, risks, and grounded answers.",
+    capabilitiesTitle: "What it can do",
+    capabilities: ["Analyze pasted text, PDF, JPEG, and PNG letters", "Translate the full analysis into 16 languages", "Answer grounded questions with streaming chat", "Create an editable formal German reply"],
+    privacyTitle: "Privacy",
+    privacy: "Documents are processed temporarily. Up to three recent letters are kept only in this tab's memory so you can switch between them. They are not stored on the server or in persistent browser storage, and disappear when the tab is closed or refreshed.",
+    limitsTitle: "Important limitations",
+    limits: "AI output can be incomplete or incorrect and is not legal advice. Verify important dates, amounts, account details, and decisions against the original letter or with the responsible office.",
+  },
+  German: {
+    description: "German Letter Assistant macht aus komplexen offiziellen Schreiben klare Aufgaben, Fristen, Zahlungsinformationen, Risiken und belegte Antworten.",
+    capabilitiesTitle: "Funktionen",
+    capabilities: ["Text-, PDF-, JPEG- und PNG-Briefe analysieren", "Die vollständige Analyse in 16 Sprachen übersetzen", "Fragen im belegten Streaming-Chat beantworten", "Einen bearbeitbaren formellen deutschen Antwortentwurf erstellen"],
+    privacyTitle: "Datenschutz",
+    privacy: "Dokumente werden nur vorübergehend verarbeitet. Bis zu drei aktuelle Briefe bleiben ausschließlich im Speicher dieses Tabs, damit Sie zwischen ihnen wechseln können. Sie werden weder auf dem Server noch dauerhaft im Browser gespeichert und verschwinden beim Schließen oder Aktualisieren des Tabs.",
+    limitsTitle: "Wichtige Einschränkungen",
+    limits: "KI-Ausgaben können unvollständig oder falsch sein und sind keine Rechtsberatung. Prüfen Sie wichtige Fristen, Beträge, Kontodaten und Entscheidungen im Originalbrief oder bei der zuständigen Stelle.",
+  },
+  Persian: {
+    description: "دستیار نامه‌های آلمانی، نامه‌های رسمی پیچیده را به اقدام‌ها، مهلت‌ها، اطلاعات پرداخت، ریسک‌ها و پاسخ‌های مستند و قابل‌فهم تبدیل می‌کند.",
+    capabilitiesTitle: "قابلیت‌ها",
+    capabilities: ["تحلیل متن و فایل‌های پی‌دی‌اف، جی‌پگ و پی‌ان‌جی", "ترجمه کامل تحلیل به ۱۶ زبان", "پاسخ‌گویی مستند با چت جریانی", "ساخت پیش‌نویس رسمی و قابل‌ویرایش آلمانی"],
+    privacyTitle: "حریم خصوصی",
+    privacy: "اسناد فقط به‌صورت موقت پردازش می‌شوند. حداکثر سه نامهٔ اخیر فقط در حافظهٔ همین تب نگه داشته می‌شوند تا بتوانید بین آن‌ها جابه‌جا شوید. اطلاعات روی سرور یا حافظهٔ دائمی مرورگر ذخیره نمی‌شوند و با بستن یا بازخوانی تب از بین می‌روند.",
+    limitsTitle: "محدودیت‌های مهم",
+    limits: "خروجی هوش مصنوعی ممکن است ناقص یا نادرست باشد و مشاورهٔ حقوقی نیست. تاریخ‌ها، مبلغ‌ها، اطلاعات بانکی و تصمیم‌های مهم را با نامهٔ اصلی یا ادارهٔ مسئول بررسی کنید.",
+  },
+};
+
+const plainLabel = (value) => value.replace(/^[^\p{L}\p{N}]+/u, "").trim();
+
+export default function Dashboard() {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
-  const [mode, setMode] = useState("text");
+  const [mode, setMode] = useState("pdf");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [originalResult, setOriginalResult] = useState(null);
@@ -999,119 +1301,107 @@ export default function Dashboard({ onBack }) {
   const [showAbout, setShowAbout] = useState(false);
   const [copied, setCopied] = useState(false);
   const [outputLanguage, setOutputLanguage] = useState("English");
-  const [sessionLetterCount, setSessionLetterCount] = useState(0);
-  const [darkMode, setDarkMode] = useState(false);
-  const [translationCache, setTranslationCache] = useState({});
+  const [recentLetters, setRecentLetters] = useState([]);
+  const [activeLetterId, setActiveLetterId] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const savedPreference = localStorage.getItem("darkMode");
+    return savedPreference === null ? true : savedPreference === "true";
+  });
   const [isTranslating, setIsTranslating] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
   const [chatMessages, setChatMessages] = useState([
     { role: "assistant", content: UI_LABELS.English.welcome }
   ]);
   const [chatInput, setChatInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState("");
-  const [replyOptions, setReplyOptions] = useState(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatError, setChatError] = useState(null);
+  const [replyDraftIntent, setReplyDraftIntent] = useState(null);
+  const [replyDraftContext, setReplyDraftContext] = useState("");
+  const [copiedDraftIndex, setCopiedDraftIndex] = useState(null);
 
   const typewriterRef = useRef(null);
   const fileInputRef = useRef(null);
   const chatEndRef = useRef(null);
+  const translationCacheRef = useRef(new Map());
+  const translationRequestRef = useRef(0);
+  const chatHistoryByLanguageRef = useRef(new Map());
+  const letterSessionsRef = useRef(new Map());
+  const letterIdRef = useRef(0);
 
   const labels = UI_LABELS[outputLanguage] || UI_LABELS.English;
-
-  useEffect(() => {
-    const saved = localStorage.getItem("darkMode");
-    if (saved === "true") setDarkMode(true);
-  }, []);
+  const replyUi = REPLY_DRAFT_UI[outputLanguage] || REPLY_DRAFT_UI.English;
+  const historyUi = HISTORY_UI[outputLanguage] || HISTORY_UI.English;
+  const aboutUi = ABOUT_UI[outputLanguage] || {
+    description: labels.aboutFeatures,
+    capabilitiesTitle: "",
+    capabilities: [],
+    privacyTitle: "",
+    privacy: `${labels.aboutPrivacy} ${historyUi.privacy}.`,
+    limitsTitle: "",
+    limits: labels.aboutDisclaimer,
+  };
+  const isRtl = outputLanguage === "Arabic" || outputLanguage === "Persian";
+  const localizedLevel = (level) => {
+    const key = (level || "medium").toLowerCase();
+    return (LEVEL_LABELS[outputLanguage] || LEVEL_LABELS.English)[key] || level;
+  };
+  const localizedReplyOption = (option) => (
+    REPLY_OPTION_LABELS[option]?.[outputLanguage]
+    || REPLY_OPTION_LABELS[option]?.English
+    || option
+  );
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatMessages, streamingMessage]);
 
-  // ========== INSTANT LANGUAGE SWITCHING - ALL FIELDS ==========
-  useEffect(() => {
-    const updateContent = async () => {
-      // Update analysis results (all fields)
-      if (originalResult) {
-        if (outputLanguage === "English") {
-          setResult(originalResult);
-          setAnimatedSummary(originalResult?.tldr || "");
-        } else {
-          const cacheKey = `${JSON.stringify(originalResult)}_${outputLanguage}`;
-          if (translationCache[cacheKey]) {
-            const cached = translationCache[cacheKey];
-            setResult(cached);
-            setAnimatedSummary(cached?.tldr || "");
-          } else {
-            await translateResults(originalResult, outputLanguage);
-          }
-        }
-      }
-      
-      // Update chat welcome message
-      const newWelcome = labels.welcome;
-      setChatMessages(prev => {
-        const newMessages = [...prev];
-        if (newMessages.length > 0 && newMessages[0].role === "assistant") {
-          const isWelcome = newMessages[0].content === UI_LABELS.English.welcome || 
-                           Object.values(UI_LABELS).some(l => l.welcome === newMessages[0].content);
-          if (isWelcome) {
-            newMessages[0] = { ...newMessages[0], content: newWelcome };
-          }
-        }
-        return newMessages;
-      });
-    };
+  const handleLanguageChange = async (targetLanguage) => {
+    const previousLanguage = outputLanguage;
+    const previousResult = result;
+    chatHistoryByLanguageRef.current.set(previousLanguage, chatMessages);
+    const targetChatMessages = chatHistoryByLanguageRef.current.get(targetLanguage)
+      || [{ role: "assistant", content: UI_LABELS[targetLanguage].welcome }];
+    setOutputLanguage(targetLanguage);
+    setChatMessages(targetChatMessages);
+    setChatError(null);
+    setAnalysisError("");
+    setReplyDraftIntent(null);
+    setReplyDraftContext("");
 
-    updateContent();
-  }, [outputLanguage]);
+    if (!originalResult) return;
 
-  // ========== UPDATED: translateResults with caching ==========
-  const translateResults = async (data, targetLang) => {
-    if (isTranslating) return;
-    
-    // ✅ Check cache first - INSTANT if already translated
-    const cacheKey = `${JSON.stringify(data)}_${targetLang}`;
-    if (translationCache[cacheKey]) {
-      const cached = translationCache[cacheKey];
+    const requestId = ++translationRequestRef.current;
+    const cached = translationCacheRef.current.get(targetLanguage);
+    if (cached) {
       setResult(cached);
-      setAnimatedSummary(cached?.tldr || "");
-      return; // ✅ Instant return from cache - NO API call!
-    }
-    
-    setIsTranslating(true);
-    
-    try {
-      console.log(`🔄 Translating to: ${targetLang} (batch)`);
-      const response = await fetch(`${API_URL}/translate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          analysis: data,
-          output_language: targetLang
-        })
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Translation failed:', errorText);
-        throw new Error("Translation failed");
-      }
-      
-      const translated = await response.json();
-      console.log(`✅ Translation complete for: ${targetLang}`);
-      
-      // ✅ Cache the result for instant future switching
-      setTranslationCache(prev => ({ ...prev, [cacheKey]: translated }));
-      setResult(translated);
-      setAnimatedSummary(translated?.tldr || "");
-      
-    } catch (err) {
-      console.error("Translation error:", err);
-      setResult(originalResult);
-      setAnimatedSummary(originalResult?.tldr || "");
-    } finally {
+      setAnimatedSummary(cached.tldr || "");
       setIsTranslating(false);
+      return;
+    }
+
+    setIsTranslating(true);
+    setResult(null);
+    try {
+      const translated = await translateAnalysis(originalResult, targetLanguage);
+      if (translationRequestRef.current !== requestId) return;
+      translationCacheRef.current.set(targetLanguage, translated);
+      setResult(translated);
+      setAnimatedSummary(translated.tldr || "");
+    } catch (error) {
+      if (translationRequestRef.current !== requestId) return;
+      setAnalysisError(getUserErrorMessage(error, "translation", previousLanguage));
+      setOutputLanguage(previousLanguage);
+      setChatMessages(
+        chatHistoryByLanguageRef.current.get(previousLanguage)
+        || [{ role: "assistant", content: UI_LABELS[previousLanguage].welcome }],
+      );
+      setResult(previousResult || originalResult);
+      setAnimatedSummary((previousResult || originalResult).tldr || "");
+    } finally {
+      if (translationRequestRef.current === requestId) setIsTranslating(false);
     }
   };
 
@@ -1139,10 +1429,13 @@ export default function Dashboard({ onBack }) {
 
   const handleFileSelect = (e) => {
     const f = e.target.files[0];
-    if (f && (f.type === "application/pdf" || f.type.startsWith("image/"))) {
+    if (f && ["application/pdf", "image/jpeg", "image/png"].includes(f.type)) {
       setFile(f);
+      setAnalysisError("");
     } else {
-      alert("Please select a valid PDF or image file");
+      setFile(null);
+      setAnalysisError(getUserErrorMessage({ code: "unsupported_file" }, "analysis", outputLanguage));
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -1152,10 +1445,12 @@ export default function Dashboard({ onBack }) {
     e.preventDefault();
     e.stopPropagation();
     const f = e.dataTransfer.files[0];
-    if (f && (f.type === "application/pdf" || f.type.startsWith("image/"))) {
+    if (f && ["application/pdf", "image/jpeg", "image/png"].includes(f.type)) {
       setFile(f);
+      setAnalysisError("");
     } else {
-      alert("Please drop a valid PDF or image file");
+      setFile(null);
+      setAnalysisError(getUserErrorMessage({ code: "unsupported_file" }, "analysis", outputLanguage));
     }
   };
 
@@ -1219,6 +1514,11 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
 
   const exportToPDF = async () => {
     if (!result) return;
+
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import("html2canvas"),
+      import("jspdf"),
+    ]);
     
     const pdfContainer = document.createElement('div');
     pdfContainer.style.padding = '20px';
@@ -1228,8 +1528,8 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     pdfContainer.style.color = '#111827';
     
     pdfContainer.innerHTML = `
-      <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #7c3aed; padding-bottom: 10px;">
-        <h1 style="color: #7c3aed;">${labels.brandName}</h1>
+      <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #4f46e5; padding-bottom: 10px;">
+        <h1 style="color: #4f46e5;">${labels.brandName}</h1>
         <p style="color: #6b7280;">${labels.analysisResult} - ${new Date().toLocaleString()}</p>
       </div>
       
@@ -1295,135 +1595,223 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     document.body.removeChild(pdfContainer);
   };
 
+  const captureActiveLetter = () => {
+    if (!activeLetterId || !originalResult || !result) return;
+
+    const chatHistory = new Map(chatHistoryByLanguageRef.current);
+    chatHistory.set(outputLanguage, chatMessages);
+    const existing = letterSessionsRef.current.get(activeLetterId) || {};
+    letterSessionsRef.current.set(activeLetterId, {
+      ...existing,
+      id: activeLetterId,
+      originalResult,
+      result,
+      outputLanguage,
+      animatedSummary,
+      chatMessages,
+      chatHistory,
+      translationCache: new Map(translationCacheRef.current),
+      mode,
+      text,
+      file,
+      activeAccordion,
+    });
+  };
+
+  const clearCurrentLetter = () => {
+    if (typewriterRef.current) clearInterval(typewriterRef.current);
+    translationRequestRef.current += 1;
+    setActiveLetterId(null);
+    setResult(null);
+    setOriginalResult(null);
+    setAnimatedSummary("");
+    setText("");
+    setFile(null);
+    setMode("pdf");
+    setChatMessages([{ role: "assistant", content: labels.welcome }]);
+    setAnalysisError("");
+    setChatError(null);
+    setReplyDraftIntent(null);
+    setReplyDraftContext("");
+    setCopiedDraftIndex(null);
+    translationCacheRef.current = new Map();
+    chatHistoryByLanguageRef.current = new Map();
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const restoreLetterSession = (session) => {
+    if (!session) return;
+    translationRequestRef.current += 1;
+    setActiveLetterId(session.id);
+    setOriginalResult(session.originalResult);
+    setResult(session.result);
+    setOutputLanguage(session.outputLanguage);
+    setAnimatedSummary(session.animatedSummary || session.result.tldr || "");
+    setChatMessages(session.chatMessages);
+    setMode(session.mode);
+    setText(session.text);
+    setFile(session.file);
+    setActiveAccordion(session.activeAccordion || "whatToDo");
+    setAnalysisError("");
+    setChatError(null);
+    setReplyDraftIntent(null);
+    setReplyDraftContext("");
+    setCopiedDraftIndex(null);
+    translationCacheRef.current = new Map(session.translationCache);
+    chatHistoryByLanguageRef.current = new Map(session.chatHistory);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const switchLetter = (letterId) => {
+    if (letterId === activeLetterId || loading || isTranslating || isStreaming) return;
+    captureActiveLetter();
+    restoreLetterSession(letterSessionsRef.current.get(letterId));
+  };
+
+  const removeLetter = (letterId) => {
+    const remaining = recentLetters.filter((letter) => letter.id !== letterId);
+    letterSessionsRef.current.delete(letterId);
+    setRecentLetters(remaining);
+
+    if (letterId === activeLetterId) {
+      if (remaining.length > 0) {
+        restoreLetterSession(letterSessionsRef.current.get(remaining[0].id));
+      } else {
+        clearCurrentLetter();
+      }
+    }
+  };
+
+  const clearLetterHistory = () => {
+    letterSessionsRef.current = new Map();
+    setRecentLetters([]);
+    clearCurrentLetter();
+  };
+
   const analyzeLetter = async () => {
     if (mode === "text" && !text.trim()) {
-      alert("Please paste your letter text");
+      setAnalysisError(getUserErrorMessage({ code: "missing_text" }, "analysis", outputLanguage));
       return;
     }
     if (mode === "pdf" && !file) {
-      alert("Please upload a PDF or image file");
+      setAnalysisError(getUserErrorMessage({ code: "missing_file" }, "analysis", outputLanguage));
       return;
     }
 
+    captureActiveLetter();
     setLoading(true);
+    setActiveLetterId(null);
     setResult(null);
     setOriginalResult(null);
     setAnimatedSummary("");
     setChatError(null);
+    setAnalysisError("");
+    chatHistoryByLanguageRef.current = new Map();
+    setReplyDraftIntent(null);
+    setReplyDraftContext("");
+    setCopiedDraftIndex(null);
     const welcomeMsg = labels.welcome;
     setChatMessages([{ role: "assistant", content: welcomeMsg }]);
 
     try {
-      let response;
-      if (mode === "text") {
-        response = await fetch(`${API_URL}/analyze-text`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ 
-            letter_text: text,
-            output_language: outputLanguage
-          }),
-        });
-      } else {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("output_language", outputLanguage);
-        response = await fetch(`${API_URL}/analyze-pdf`, {
-          method: "POST",
-          body: formData,
-        });
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Backend error");
-      }
-      
-      const data = await response.json();
+      const data = mode === "text"
+        ? await analyzeText(text, outputLanguage)
+        : await analyzeFile(file, outputLanguage);
       
       if (data.is_valid_letter === false) {
         const invalidMessage = data.message || "This doesn't look like an official German letter.";
-        setChatMessages([{ role: "assistant", content: invalidMessage }]);
-        setLoading(false);
+        setAnalysisError(invalidMessage);
+        setChatMessages([{ role: "assistant", content: labels.welcome }]);
         return;
       }
-      
+
+      translationCacheRef.current = new Map([[outputLanguage, data]]);
       setOriginalResult(data);
       setResult(data);
       startTypewriter(data.tldr || data.summary || "No summary available");
-      setSessionLetterCount(prev => prev + 1);
+      letterIdRef.current += 1;
+      const letterId = `letter-${letterIdRef.current}`;
+      const welcomeMessages = [{ role: "assistant", content: labels.welcome }];
+      const session = {
+        id: letterId,
+        originalResult: data,
+        result: data,
+        outputLanguage,
+        animatedSummary: data.tldr || "",
+        chatMessages: welcomeMessages,
+        chatHistory: new Map(),
+        translationCache: new Map([[outputLanguage, data]]),
+        mode,
+        text,
+        file,
+        activeAccordion: "whatToDo",
+      };
+      letterSessionsRef.current.set(letterId, session);
+      setActiveLetterId(letterId);
+      setRecentLetters((previous) => {
+        const next = [{
+          id: letterId,
+          sender: data.sender,
+          topic: data.letter_topic,
+          analyzedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        }, ...previous].slice(0, 3);
+        const retainedIds = new Set(next.map((letter) => letter.id));
+        for (const existingId of letterSessionsRef.current.keys()) {
+          if (!retainedIds.has(existingId)) letterSessionsRef.current.delete(existingId);
+        }
+        return next;
+      });
     } catch (err) {
       console.error(err);
-      alert("Backend connection failed. Make sure the server is running.");
+      setAnalysisError(getUserErrorMessage(err, "analysis", outputLanguage));
     } finally {
       setLoading(false);
     }
   };
 
-  const generateReplyDraft = async (intent) => {
+  const generateReplyDraft = async (intent, additionalContext = "") => {
     if (!result) return;
     
     setIsStreaming(true);
-    setStreamingMessage("Generating reply draft...");
+    setStreamingMessage(replyUi.generating);
     setChatError(null);
 
     try {
-      const requestBody = {
-        analysis: result,
-        intent: intent,
-        output_language: outputLanguage,
-      };
-
-      const response = await fetch(`${API_URL}/reply-draft`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || "Failed to generate reply draft");
-      }
-
-      const data = await response.json();
+      const data = await requestReplyDraft(result, intent, additionalContext);
       
       setChatMessages(prev => [...prev, { 
         role: "assistant", 
-        content: data.reply || "Here's your reply draft."
+        content: data.reply || "Here's your reply draft.",
+        isDraft: true,
+        draftIntent: intent,
+        draftContext: additionalContext,
       }]);
+      setReplyDraftIntent(null);
+      setReplyDraftContext("");
       
     } catch (err) {
       console.error("Reply draft error:", err);
-      setChatError(err.message || "Failed to generate reply draft. Please try again.");
-      setChatMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: `❌ ${err.message || "Failed to generate reply draft. Please try again."}`
-      }]);
+      setChatError(getUserErrorMessage(err, "replyDraft", outputLanguage));
     } finally {
       setIsStreaming(false);
       setStreamingMessage("");
     }
   };
 
-  // ========== UPDATED: sendChatMessage with letter check ==========
-  const sendChatMessage = async () => {
-    // ✅ Check if a letter has been analyzed
+  const sendChatMessage = async (messageOverride) => {
     if (!result) {
-      setChatError("Please analyze a letter first.");
-      setChatMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "⚠️ Please upload or paste a letter and click 'Analyze Letter' first before asking questions."
-      }]);
+      setChatError(getUserErrorMessage({ code: "missing_letter" }, "chat", outputLanguage));
       return;
     }
     
-    if (!chatInput.trim() || isStreaming) return;
+    const requestedMessage = typeof messageOverride === "string" ? messageOverride : chatInput;
+    if (!requestedMessage.trim() || isStreaming) return;
     
-    const userMessage = chatInput;
+    const userMessage = requestedMessage.trim();
     setChatInput("");
     setChatError(null);
     
-    const messagesHistory = chatMessages.map(msg => ({
+    const messagesHistory = chatMessages.slice(-49).map(msg => ({
       role: msg.role,
       content: msg.content
     }));
@@ -1433,133 +1821,27 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     
     setIsStreaming(true);
     setStreamingMessage("");
-    setReplyOptions(null);
     
     try {
-      const analysisData = {
-        is_valid_letter: result?.is_valid_letter !== undefined ? result.is_valid_letter : true,
-        letter_text: result?.letter_text || text || "",
-        confidence_level: result?.confidence_level || "medium",
-        confidence_reason: result?.confidence_reason || "Analysis completed based on the letter content.",
-        letter_involves_payment: result?.letter_involves_payment || false,
-        sender: result?.sender || "Unknown sender",
-        sender_type: result?.sender_type || "Other",
-        urgency_level: result?.urgency_level || "Medium",
-        urgency_reason: result?.urgency_reason || "Action required based on the letter content.",
-        letter_topic: result?.letter_topic || "Official letter",
-        tldr: result?.tldr || "",
-        useful_details: result?.useful_details || [],
-        deadlines: result?.deadlines || [],
-        required_actions: result?.required_actions || [],
-        required_documents: result?.required_documents || [],
-        payment_information: result?.payment_information || [],
-        possible_consequences: result?.possible_consequences || [],
-        unclear_or_risky_parts: result?.unclear_or_risky_parts || [],
-        safety_note: result?.safety_note || "This is AI-generated help, not legal advice.",
-      };
-
-      const requestBody = {
-        letter_text: result?.letter_text || text || "",
-        analysis: analysisData,
+      const streamed = await streamChat({
+        letterText: result.letter_text,
+        analysis: result,
         messages: messagesHistory,
-        output_language: outputLanguage,
-      };
-
-      const response = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestBody),
+        outputLanguage,
+        onToken: setStreamingMessage,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Backend error: ${response.status}`);
-      }
-      
-      const contentType = response.headers.get("content-type") || "";
-      
-      if (contentType.includes("application/json")) {
-        const data = await response.json();
-        setIsStreaming(false);
-        
-        if (data.reply) {
-          setChatMessages(prev => [...prev, { role: "assistant", content: data.reply }]);
-        } else if (data.ui_action === "show_reply_options" && data.options) {
-          setChatMessages(prev => [...prev, { 
-            role: "assistant", 
-            content: data.reply || "How would you like me to write the reply?",
-            isOptions: true,
-            options: data.options
-          }]);
-        } else {
-          const errorMsg = "I couldn't process your request. Please try again.";
-          setChatMessages(prev => [...prev, { role: "assistant", content: `❌ ${errorMsg}` }]);
-          setChatError(errorMsg);
-        }
-        return;
-      }
-      
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullResponse = "";
-      let buffer = "";
-      let isDone = false;
-      
-      while (!isDone) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-        
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-        
-        for (const line of lines) {
-          const trimmedLine = line.trim();
-          if (!trimmedLine) continue;
-          
-          if (trimmedLine.startsWith("data: ")) {
-            try {
-              const jsonStr = trimmedLine.substring(6);
-              const data = JSON.parse(jsonStr);
-              
-              if (data.type === "token" && data.content) {
-                fullResponse += data.content;
-                setStreamingMessage(fullResponse);
-              } else if (data.type === "reply_options") {
-                setReplyOptions(data.options);
-              } else if (data.type === "done") {
-                isDone = true;
-              } else if (data.type === "error") {
-                throw new Error(data.message || "An error occurred during chat");
-              } else if (data.reply) {
-                fullResponse += data.reply;
-                setStreamingMessage(fullResponse);
-              }
-            } catch (e) {
-              if (trimmedLine.length > 10) {
-                console.warn("Could not parse SSE data:", trimmedLine);
-              }
-            }
-          }
-        }
-      }
-      
-      setIsStreaming(false);
-      
-      if (fullResponse) {
-        setChatMessages(prev => [...prev, { role: "assistant", content: fullResponse }]);
-      } else if (replyOptions && replyOptions.length > 0) {
+      if (streamed.content) {
+        setChatMessages(prev => [...prev, { role: "assistant", content: streamed.content }]);
+      } else if (streamed.replyOptions?.length) {
         setChatMessages(prev => [...prev, { 
           role: "assistant", 
-          content: "How would you like me to write the reply?",
+          content: labels.replyPrompt || UI_LABELS.English.replyPrompt,
           isOptions: true,
-          options: replyOptions
+          options: streamed.replyOptions
         }]);
       } else {
-        const errorMsg = "I couldn't process your request. Please try again.";
-        setChatMessages(prev => [...prev, { role: "assistant", content: `❌ ${errorMsg}` }]);
+        const errorMsg = getUserErrorMessage(null, "chat", outputLanguage);
         setChatError(errorMsg);
       }
       
@@ -1567,12 +1849,8 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       console.error("Chat error:", err);
       setIsStreaming(false);
       
-      const errorMsg = err.message || "Something went wrong. Please try again.";
+      const errorMsg = getUserErrorMessage(err, "chat", outputLanguage);
       setChatError(errorMsg);
-      setChatMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: `❌ ${errorMsg}`
-      }]);
     } finally {
       setIsStreaming(false);
       setStreamingMessage("");
@@ -1580,37 +1858,40 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
   };
 
   const handleReplyOptionClick = (option) => {
-    generateReplyDraft(option);
+    setReplyDraftIntent(option);
+    setReplyDraftContext("");
+    setChatError(null);
   };
 
-  // ========== UPDATED: handleSuggestionClick with letter check ==========
+  const submitReplyDraft = () => {
+    if (!replyDraftIntent || isStreaming) return;
+    generateReplyDraft(replyDraftIntent, replyDraftContext);
+  };
+
+  const updateDraftMessage = (index, content) => {
+    setChatMessages((previous) => previous.map((message, messageIndex) => (
+      messageIndex === index ? { ...message, content } : message
+    )));
+  };
+
+  const copyDraftMessage = async (index, content) => {
+    await navigator.clipboard.writeText(content);
+    setCopiedDraftIndex(index);
+    setTimeout(() => setCopiedDraftIndex(null), 2_000);
+  };
+
   const handleSuggestionClick = (suggestion) => {
-    // ✅ Check if a letter has been analyzed
     if (!result) {
-      setChatError("Please analyze a letter first.");
-      setChatMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "⚠️ Please upload or paste a letter and click 'Analyze Letter' first before asking questions."
-      }]);
+      setChatError(getUserErrorMessage({ code: "missing_letter" }, "chat", outputLanguage));
       return;
     }
     
-    setChatInput(suggestion);
-    setTimeout(() => sendChatMessage(), 100);
+    sendChatMessage(suggestion);
   };
 
   const resetAnalysis = () => {
-    if (typewriterRef.current) clearInterval(typewriterRef.current);
-    setResult(null);
-    setOriginalResult(null);
-    setAnimatedSummary("");
-    setText("");
-    setFile(null);
-    setChatMessages([{ role: "assistant", content: labels.welcome }]);
-    setSessionLetterCount(0);
-    setReplyOptions(null);
-    setChatError(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    captureActiveLetter();
+    clearCurrentLetter();
   };
 
   const toggleAccordion = (id) => {
@@ -1619,12 +1900,12 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
 
   const getConfidenceDisplay = () => {
     const level = result?.confidence_level || "medium";
-    const labels = {
-      high: { label: "High", color: "#065f46", bg: "#ecfdf5", border: "#a7f3d0" },
-      medium: { label: "Medium", color: "#92400e", bg: "#fffbeb", border: "#fcd34d" },
-      low: { label: "Low", color: "#991b1b", bg: "#fef2f2", border: "#fca5a5" }
+    const levels = {
+      high: { label: localizedLevel("high"), color: "#065f46", bg: "#ecfdf5", border: "#a7f3d0" },
+      medium: { label: localizedLevel("medium"), color: "#92400e", bg: "#fffbeb", border: "#fcd34d" },
+      low: { label: localizedLevel("low"), color: "#991b1b", bg: "#fef2f2", border: "#fca5a5" }
     };
-    return labels[level.toLowerCase()] || labels.medium;
+    return levels[level.toLowerCase()] || levels.medium;
   };
 
   const confidenceInfo = getConfidenceDisplay();
@@ -1646,7 +1927,13 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     { id: "careful", items: result?.unclear_or_risky_parts || [] }
   ];
 
-  const accordionIcons = { whatToDo: "✅", howToPay: "💳", documents: "📄", consequences: "⚠️", careful: "🛡️" };
+  const accordionIcons = {
+    whatToDo: <Clipboard size={15} />,
+    howToPay: <CreditCard size={15} />,
+    documents: <FileText size={15} />,
+    consequences: <AlertTriangle size={15} />,
+    careful: <ShieldCheck size={15} />,
+  };
 
   const accordionTitles = {
     whatToDo: labels.accordionWhat,
@@ -1659,32 +1946,35 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
   // ========== STYLES ==========
   const getStyles = () => ({
     page: {
-      background: darkMode ? "#0f172a" : "#f3f6fb",
+      background: darkMode ? "#18181b" : "#f6f7f9",
       minHeight: "100vh",
       fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      color: darkMode ? "#e2e8f0" : "#111827",
+      color: darkMode ? "#f4f4f5" : "#18181b",
       transition: "all 0.3s ease",
     },
     topbar: {
+      position: "sticky",
+      top: 0,
+      zIndex: 30,
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
       padding: "12px 24px",
-      background: darkMode ? "#1e293b" : "white",
-      borderBottom: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
+      background: darkMode ? "#27272a" : "white",
+      borderBottom: darkMode ? "1px solid #3f3f46" : "1px solid #e4e4e7",
       transition: "all 0.3s ease",
     },
     brand: { display: "flex", alignItems: "center", gap: "10px" },
-    brandIcon: { fontSize: "24px" },
-    brandName: { fontSize: "16px", fontWeight: 600, color: darkMode ? "#e2e8f0" : "#1e1b4b" },
+    brandIcon: { display: "flex", color: "#4f46e5" },
+    brandName: { fontSize: "16px", fontWeight: 650, color: darkMode ? "#fafafa" : "#18181b" },
     topRight: { display: "flex", alignItems: "center", gap: "12px" },
     themeBtn: {
       background: darkMode ? "#334155" : "white",
       border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
       borderRadius: "8px",
-      padding: "5px 12px",
+      padding: "7px",
       cursor: "pointer",
-      fontSize: "16px",
+      display: "inline-flex",
     },
     langSel: {
       background: darkMode ? "#334155" : "white",
@@ -1693,15 +1983,6 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       padding: "5px 12px",
       fontSize: "12px",
       cursor: "pointer",
-      color: darkMode ? "#e2e8f0" : "#374151",
-    },
-    backBtn: {
-      border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
-      background: darkMode ? "#334155" : "white",
-      padding: "5px 12px",
-      borderRadius: "8px",
-      cursor: "pointer",
-      fontSize: "12px",
       color: darkMode ? "#e2e8f0" : "#374151",
     },
     aboutBtn: {
@@ -1715,16 +1996,25 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     },
     main: {
       display: "grid",
-      gridTemplateColumns: "320px 1fr",
+      gridTemplateColumns: "300px minmax(0, 1fr)",
       minHeight: "calc(100vh - 55px)",
+      marginRight: isChatOpen && !isRtl ? "420px" : 0,
+      marginLeft: isChatOpen && isRtl ? "420px" : 0,
+      transition: "margin 0.2s ease",
     },
     leftPanel: {
       padding: "24px",
       borderRight: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
-      background: darkMode ? "#1e293b" : "#fafcff",
+      background: darkMode ? "#27272a" : "#ffffff",
+      maxHeight: "calc(100vh - 55px)",
+      overflowY: "auto",
+      boxSizing: "border-box",
+      alignSelf: "start",
+      position: "sticky",
+      top: "55px",
     },
     rightPanel: {
-      background: darkMode ? "#0f172a" : "#f3f6fb",
+      background: darkMode ? "#18181b" : "#f6f7f9",
       display: "flex",
       flexDirection: "column",
     },
@@ -1743,7 +2033,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       width: "24px",
       height: "24px",
       borderRadius: "50%",
-      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      background: "#4f46e5",
       color: "white",
       fontSize: "11px",
       fontWeight: 700,
@@ -1771,38 +2061,42 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     modeBtn: {
       flex: 1,
       padding: "8px",
-      borderRadius: "40px",
+      borderRadius: "6px",
       fontSize: "12px",
       fontWeight: 500,
       cursor: "pointer",
       border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
       background: darkMode ? "#334155" : "white",
       color: darkMode ? "#94a3b8" : "#6b7280",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "6px",
     },
     modeBtnActive: {
-      background: "#ede9fe",
-      border: "1px solid #7c3aed",
-      color: "#7c3aed",
+      background: darkMode ? "#312e81" : "#eef2ff",
+      border: "1px solid #4f46e5",
+      color: darkMode ? "#e0e7ff" : "#3730a3",
     },
     textarea: {
       width: "100%",
       minHeight: "180px",
       border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
-      borderRadius: "12px",
+      borderRadius: "8px",
       padding: "12px",
       fontSize: "13px",
       outline: "none",
       background: darkMode ? "#0f172a" : "white",
-      fontFamily: "monospace",
+      fontFamily: "inherit",
       resize: "vertical",
       color: darkMode ? "#e2e8f0" : "#111827",
     },
     dropZone: {
       border: darkMode ? "2px dashed #475569" : "2px dashed #c7d2fe",
-      borderRadius: "12px",
+      borderRadius: "8px",
       padding: "32px",
       textAlign: "center",
-      background: darkMode ? "#0f172a" : "#f8fbff",
+      background: darkMode ? "#18181b" : "#fafafa",
       cursor: "pointer",
       minHeight: "180px",
       display: "flex",
@@ -1811,28 +2105,32 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       justifyContent: "center",
       gap: "6px",
     },
-    dropIcon: { fontSize: "32px" },
+    dropIcon: { display: "flex", color: darkMode ? "#a1a1aa" : "#71717a" },
     dropText: { fontSize: "13px", color: darkMode ? "#94a3b8" : "#4b5563" },
     dropSubtext: { fontSize: "11px", color: darkMode ? "#64748b" : "#9ca3af" },
-    fileName: { marginTop: "6px", color: "#7c3aed", fontSize: "12px", fontWeight: 500 },
+    fileName: { marginTop: "6px", color: "#4f46e5", fontSize: "12px", fontWeight: 600 },
     analyzeBtn: {
       width: "100%",
       marginTop: "12px",
       padding: "12px",
-      borderRadius: "40px",
-      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      borderRadius: "6px",
+      background: "#4f46e5",
       color: "white",
       border: "none",
       fontSize: "14px",
       fontWeight: 600,
       cursor: "pointer",
-      boxShadow: "0 10px 20px rgba(124,58,237,0.25)",
+      boxShadow: "0 1px 2px rgba(0,0,0,0.08)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "8px",
     },
     loadingCard: {
       marginTop: "12px",
       padding: "12px",
       background: darkMode ? "#0f172a" : "#f8fafc",
-      borderRadius: "12px",
+      borderRadius: "8px",
       textAlign: "center",
       border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
       display: "flex",
@@ -1844,10 +2142,10 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       width: "8px",
       height: "8px",
       borderRadius: "50%",
-      background: "#7c3aed",
+      background: "#4f46e5",
       animation: "pulse 1s infinite",
     },
-    loadingText: { fontSize: "13px", color: "#7c3aed", fontWeight: 500 },
+    loadingText: { fontSize: "13px", color: "#4f46e5", fontWeight: 500 },
     privacyNote: {
       marginTop: "12px",
       padding: "10px",
@@ -1860,11 +2158,114 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       borderRadius: "8px",
       border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
     },
-    sessionNote: {
+    historySection: {
+      marginTop: "18px",
+      paddingTop: "14px",
+      borderTop: darkMode ? "1px solid #3f3f46" : "1px solid #e4e4e7",
+    },
+    historyHeader: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "8px",
+      marginBottom: "8px",
+    },
+    historyTitle: {
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      fontSize: "12px",
+      fontWeight: 650,
+      color: darkMode ? "#e4e4e7" : "#27272a",
+    },
+    historyClear: {
+      border: 0,
+      background: "transparent",
+      color: darkMode ? "#a1a1aa" : "#71717a",
+      cursor: "pointer",
+      fontSize: "10px",
+      padding: "3px",
+    },
+    historyEmpty: {
+      padding: "10px 0",
+      color: darkMode ? "#71717a" : "#a1a1aa",
       fontSize: "11px",
-      color: darkMode ? "#64748b" : "#9ca3af",
-      textAlign: "center",
-      marginTop: "8px",
+    },
+    historyList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "5px",
+    },
+    historyItem: {
+      display: "grid",
+      gridTemplateColumns: "minmax(0, 1fr) 28px",
+      alignItems: "center",
+      gap: "4px",
+      borderRadius: "6px",
+      border: darkMode ? "1px solid #3f3f46" : "1px solid #e4e4e7",
+      background: darkMode ? "#18181b" : "#fafafa",
+      overflow: "hidden",
+    },
+    historyItemActive: {
+      border: darkMode ? "1px solid #818cf8" : "1px solid #6366f1",
+      background: darkMode ? "#272554" : "#eef2ff",
+    },
+    historySelect: {
+      minWidth: 0,
+      border: 0,
+      background: "transparent",
+      color: "inherit",
+      padding: "8px 4px 8px 9px",
+      textAlign: isRtl ? "right" : "left",
+      cursor: "pointer",
+    },
+    historySender: {
+      display: "block",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      fontSize: "11px",
+      fontWeight: 650,
+      color: darkMode ? "#f4f4f5" : "#27272a",
+    },
+    historyTopic: {
+      display: "block",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+      marginTop: "2px",
+      fontSize: "10px",
+      color: darkMode ? "#a1a1aa" : "#71717a",
+    },
+    historyMeta: {
+      display: "flex",
+      alignItems: "center",
+      gap: "5px",
+      marginTop: "4px",
+      fontSize: "9px",
+      color: darkMode ? "#71717a" : "#a1a1aa",
+    },
+    historyCurrent: {
+      color: darkMode ? "#a5b4fc" : "#4f46e5",
+      fontWeight: 650,
+    },
+    historyRemove: {
+      width: "28px",
+      height: "28px",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      border: 0,
+      background: "transparent",
+      color: darkMode ? "#71717a" : "#a1a1aa",
+      cursor: "pointer",
+    },
+    historyPrivacy: {
+      display: "block",
+      marginTop: "7px",
+      fontSize: "9px",
+      lineHeight: 1.4,
+      color: darkMode ? "#71717a" : "#a1a1aa",
     },
     resultsArea: {
       flex: 1,
@@ -1880,19 +2281,31 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       padding: "60px 20px",
       color: darkMode ? "#64748b" : "#9ca3af",
     },
+    analysisError: {
+      display: "flex",
+      alignItems: "flex-start",
+      gap: "10px",
+      padding: "14px 16px",
+      borderRadius: "8px",
+      border: darkMode ? "1px solid #7f1d1d" : "1px solid #fecaca",
+      background: darkMode ? "#2a1414" : "#fef2f2",
+      color: darkMode ? "#fecaca" : "#991b1b",
+      fontSize: "13px",
+      lineHeight: 1.5,
+    },
     emptyIcon: { fontSize: "48px", marginBottom: "12px" },
     emptyTitle: { fontSize: "16px", color: darkMode ? "#94a3b8" : "#6b7280", marginBottom: "4px" },
     emptySub: { fontSize: "13px", color: darkMode ? "#64748b" : "#9ca3af" },
     bottomLineCard: {
       background: darkMode ? "#1e293b" : "white",
       border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
-      borderRadius: "14px",
+      borderRadius: "8px",
       padding: "20px",
       boxShadow: darkMode ? "none" : "0 1px 3px rgba(0,0,0,0.05)",
     },
     blLabel: {
       fontSize: "11px",
-      color: "#7c3aed",
+      color: "#4f46e5",
       fontWeight: 700,
       letterSpacing: "1.2px",
       textTransform: "uppercase",
@@ -1912,7 +2325,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       borderTop: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
     },
     bridgeLink: {
-      color: "#7c3aed",
+      color: "#4f46e5",
       cursor: "pointer",
       fontWeight: 500,
     },
@@ -1937,11 +2350,11 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       display: "inline-flex",
       alignItems: "center",
       gap: "4px",
-      color: "#7c3aed",
+      color: "#4f46e5",
       fontWeight: 600,
-      background: "#ede9fe",
+      background: "#eef2ff",
       padding: "2px 8px",
-      borderRadius: "20px",
+      borderRadius: "6px",
     },
     warningBadge: {
       display: "inline-flex",
@@ -1951,19 +2364,22 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       fontWeight: 600,
       background: "#fee2e2",
       padding: "2px 8px",
-      borderRadius: "20px",
+      borderRadius: "6px",
     },
     deadlineBar: {
       background: darkMode ? "#2a1414" : "#fef2f2",
       border: darkMode ? "1px solid #5a2a2a" : "1px solid #fca5a5",
-      borderRadius: "10px",
+      borderRadius: "8px",
       padding: "12px 16px",
       color: "#dc2626",
       fontWeight: 600,
       fontSize: "14px",
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
     },
     qualityBar: {
-      borderRadius: "10px",
+      borderRadius: "8px",
       padding: "14px 16px",
     },
     qualityTitle: {
@@ -1983,7 +2399,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     accordion: {
       background: darkMode ? "#1e293b" : "white",
       border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
-      borderRadius: "10px",
+      borderRadius: "8px",
       padding: "4px 0",
     },
     accordionSummary: {
@@ -2010,7 +2426,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     additionalDetails: {
       background: darkMode ? "#1e293b" : "white",
       border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
-      borderRadius: "10px",
+      borderRadius: "8px",
       padding: "14px 16px",
     },
     additionalTitle: {
@@ -2027,10 +2443,13 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     safetyNote: {
       background: darkMode ? "#0a1e0a" : "#f0fdf4",
       border: darkMode ? "1px solid #1a3a1a" : "1px solid #bbf7d0",
-      borderRadius: "10px",
+      borderRadius: "8px",
       padding: "10px 14px",
       fontSize: "12px",
       color: darkMode ? "#86efac" : "#166534",
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
     },
     actionRow: {
       display: "flex",
@@ -2045,6 +2464,9 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       fontSize: "12px",
       cursor: "pointer",
       color: darkMode ? "#e2e8f0" : "#374151",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "6px",
     },
     skeletonCard: {
       height: "80px",
@@ -2067,59 +2489,99 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     },
     modalContent: {
       background: darkMode ? "#1e293b" : "white",
-      padding: "24px",
-      borderRadius: "24px",
-      maxWidth: "450px",
+      padding: "26px",
+      borderRadius: "8px",
+      maxWidth: "560px",
       width: "90%",
+      maxHeight: "80vh",
+      overflowY: "auto",
+      boxShadow: "0 24px 70px rgba(0,0,0,0.24)",
+    },
+    modalTitle: {
+      display: "flex",
+      alignItems: "center",
+      gap: "8px",
+      margin: "0 0 10px",
+      fontSize: "20px",
+    },
+    modalDescription: {
+      margin: "0 0 20px",
+      fontSize: "13px",
+      lineHeight: 1.65,
+      color: darkMode ? "#d4d4d8" : "#52525b",
+    },
+    modalSection: {
+      padding: "14px 0",
+      borderTop: darkMode ? "1px solid #3f3f46" : "1px solid #e4e4e7",
+    },
+    modalSectionTitle: {
+      margin: "0 0 8px",
+      fontSize: "13px",
+      fontWeight: 700,
+    },
+    modalList: {
+      margin: 0,
+      paddingInlineStart: "20px",
+      fontSize: "12px",
+      lineHeight: 1.7,
+      color: darkMode ? "#d4d4d8" : "#52525b",
+    },
+    modalText: {
+      margin: 0,
+      fontSize: "12px",
+      lineHeight: 1.7,
+      color: darkMode ? "#d4d4d8" : "#52525b",
     },
     modalClose: {
       marginTop: "16px",
       padding: "8px 16px",
-      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      background: "#4f46e5",
       color: "white",
       border: "none",
-      borderRadius: "40px",
+      borderRadius: "6px",
       cursor: "pointer",
     },
     chatButton: {
       position: "fixed",
-      bottom: "30px",
-      right: "30px",
-      width: "60px",
-      height: "60px",
-      borderRadius: "50%",
-      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      bottom: "24px",
+      right: isRtl ? "auto" : "24px",
+      left: isRtl ? "24px" : "auto",
+      width: "48px",
+      height: "48px",
+      borderRadius: "8px",
+      background: "#4f46e5",
       border: "none",
       color: "white",
-      fontSize: "28px",
       cursor: "pointer",
-      boxShadow: "0 8px 30px rgba(124,58,237,0.4)",
+      boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
       transition: "all 0.3s ease",
       zIndex: 999,
-      display: "flex",
+      display: isChatOpen ? "none" : "flex",
       alignItems: "center",
       justifyContent: "center",
     },
     chatWindow: {
       position: "fixed",
-      bottom: "100px",
-      right: "30px",
+      top: "55px",
+      bottom: 0,
+      right: isRtl ? "auto" : 0,
+      left: isRtl ? 0 : "auto",
       width: "420px",
-      height: "560px",
-      background: darkMode ? "#1e293b" : "white",
-      borderRadius: "16px",
-      boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+      height: "auto",
+      background: darkMode ? "#27272a" : "white",
+      borderRadius: 0,
+      boxShadow: "-10px 0 30px rgba(0,0,0,0.10)",
       display: isChatOpen ? "flex" : "none",
       flexDirection: "column",
       overflow: "hidden",
       zIndex: 999,
-      border: darkMode ? "1px solid #334155" : "1px solid #e5e7eb",
-      animation: "slideUp 0.3s ease",
+      borderLeft: darkMode ? "1px solid #3f3f46" : "1px solid #e4e4e7",
     },
     chatWindowHeader: {
       padding: "16px 20px",
-      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
-      color: "white",
+      background: darkMode ? "#27272a" : "#ffffff",
+      borderBottom: darkMode ? "1px solid #3f3f46" : "1px solid #e4e4e7",
+      color: darkMode ? "#fafafa" : "#18181b",
       display: "flex",
       alignItems: "center",
       justifyContent: "space-between",
@@ -2141,7 +2603,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     chatWindowClose: {
       background: "none",
       border: "none",
-      color: "white",
+      color: darkMode ? "#fafafa" : "#52525b",
       fontSize: "20px",
       cursor: "pointer",
       padding: "4px 8px",
@@ -2155,7 +2617,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       display: "flex",
       flexDirection: "column",
       gap: "12px",
-      background: darkMode ? "#0f172a" : "#f8fafc",
+      background: darkMode ? "#18181b" : "#f6f7f9",
     },
     chatWindowInput: {
       padding: "12px 16px",
@@ -2177,15 +2639,20 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       color: darkMode ? "#e2e8f0" : "#111827",
     },
     chatWindowSendBtn: {
-      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      background: "#4f46e5",
       border: "none",
       borderRadius: "8px",
-      padding: "10px 20px",
+      width: "38px",
+      height: "38px",
+      padding: 0,
       color: "white",
       cursor: "pointer",
       fontSize: "13px",
       fontWeight: 600,
       transition: "all 0.2s",
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
     },
     chatWindowSendBtnDisabled: {
       opacity: 0.5,
@@ -2207,7 +2674,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       width: "32px",
       height: "32px",
       borderRadius: "50%",
-      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      background: "#4f46e5",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -2229,7 +2696,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       maxWidth: "100%",
     },
     chatBubbleUser: {
-      background: "linear-gradient(135deg, #7c3aed, #5b21b6)",
+      background: "#4f46e5",
       color: "white",
       borderBottomRightRadius: "4px",
     },
@@ -2252,7 +2719,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
     },
     chatSuggestion: {
       padding: "4px 12px",
-      borderRadius: "20px",
+      borderRadius: "6px",
       border: darkMode ? "1px solid #475569" : "1px solid #e5e7eb",
       fontSize: "11px",
       cursor: "pointer",
@@ -2260,11 +2727,103 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       color: darkMode ? "#e2e8f0" : "#374151",
       transition: "all 0.2s",
     },
+    replyComposer: {
+      alignSelf: "stretch",
+      padding: "14px",
+      borderRadius: "8px",
+      border: darkMode ? "1px solid #475569" : "1px solid #cbd5e1",
+      background: darkMode ? "#1e293b" : "white",
+    },
+    replyComposerTitle: {
+      fontSize: "13px",
+      fontWeight: 600,
+      color: darkMode ? "#f8fafc" : "#111827",
+      marginBottom: "4px",
+    },
+    replyComposerLabel: {
+      display: "block",
+      fontSize: "11px",
+      color: darkMode ? "#94a3b8" : "#64748b",
+      marginBottom: "8px",
+    },
+    replyComposerTextarea: {
+      width: "100%",
+      minHeight: "88px",
+      resize: "vertical",
+      borderRadius: "6px",
+      border: darkMode ? "1px solid #475569" : "1px solid #cbd5e1",
+      background: darkMode ? "#0f172a" : "#f8fafc",
+      color: darkMode ? "#f8fafc" : "#111827",
+      padding: "10px",
+      font: "inherit",
+      fontSize: "12px",
+      lineHeight: 1.5,
+      boxSizing: "border-box",
+    },
+    replyComposerFooter: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "8px",
+      marginTop: "10px",
+    },
+    replyComposerActions: {
+      display: "flex",
+      gap: "8px",
+    },
+    replySecondaryBtn: {
+      border: darkMode ? "1px solid #475569" : "1px solid #cbd5e1",
+      background: "transparent",
+      color: darkMode ? "#e2e8f0" : "#334155",
+      borderRadius: "6px",
+      padding: "7px 10px",
+      fontSize: "11px",
+      cursor: "pointer",
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "5px",
+    },
+    replyPrimaryBtn: {
+      border: "1px solid #6d28d9",
+      background: "#6d28d9",
+      color: "white",
+      borderRadius: "6px",
+      padding: "7px 10px",
+      fontSize: "11px",
+      fontWeight: 600,
+      cursor: "pointer",
+    },
+    draftLabel: {
+      fontSize: "11px",
+      fontWeight: 700,
+      color: "#6d28d9",
+      marginBottom: "6px",
+    },
+    draftEditor: {
+      width: "320px",
+      maxWidth: "100%",
+      minHeight: "240px",
+      resize: "vertical",
+      borderRadius: "6px",
+      border: darkMode ? "1px solid #475569" : "1px solid #cbd5e1",
+      background: darkMode ? "#0f172a" : "#f8fafc",
+      color: darkMode ? "#f8fafc" : "#111827",
+      padding: "10px",
+      fontFamily: "inherit",
+      fontSize: "12px",
+      lineHeight: 1.55,
+      boxSizing: "border-box",
+    },
+    draftHint: {
+      fontSize: "10px",
+      color: darkMode ? "#94a3b8" : "#64748b",
+      marginTop: "6px",
+    },
     chatCursor: {
       display: "inline-block",
       width: "2px",
       height: "14px",
-      background: "#7c3aed",
+      background: "#4f46e5",
       marginLeft: "2px",
       animation: "blink 1s infinite",
     },
@@ -2288,34 +2847,37 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
   const styles = getStyles();
 
   return (
-    <div style={styles.page}>
+    <div style={styles.page} dir={isRtl ? "rtl" : "ltr"}>
       {/* Top Bar */}
-      <div style={styles.topbar}>
+      <div style={styles.topbar} className="app-topbar">
         <div style={styles.brand}>
-          <div style={styles.brandIcon}>📄</div>
-          <div style={styles.brandName}>German <span style={{ color: "#7c3aed" }}>Letter Assistant</span></div>
+          <div style={styles.brandIcon}><FileText size={22} strokeWidth={1.8} /></div>
+          <div style={styles.brandName}>{labels.brandName}</div>
         </div>
         <div style={styles.topRight}>
           <select 
             value={outputLanguage} 
-            onChange={(e) => setOutputLanguage(e.target.value)} 
+            onChange={(e) => handleLanguageChange(e.target.value)}
+            disabled={loading || isTranslating}
+            aria-label="Output language"
             style={styles.langSel}
           >
             {Object.keys(LANGUAGE_NAMES).map(lang => (
               <option key={lang} value={lang}>{LANGUAGE_NAMES[lang]}</option>
             ))}
           </select>
-          <button style={styles.themeBtn} onClick={toggleDarkMode}>
-            {darkMode ? "☀️" : "🌙"}
+          <button style={styles.themeBtn} onClick={toggleDarkMode} aria-label={darkMode ? "Use light theme" : "Use dark theme"}>
+            {darkMode ? <Sun size={17} /> : <Moon size={17} />}
           </button>
-          <button style={styles.backBtn} onClick={onBack}>{labels.back}</button>
-          <button style={styles.aboutBtn} onClick={() => setShowAbout(true)}>{labels.about}</button>
+          <button style={{ ...styles.aboutBtn, display: "inline-flex", alignItems: "center", gap: "5px" }} onClick={() => setShowAbout(true)}>
+            <Info size={14} /> {plainLabel(labels.about)}
+          </button>
         </div>
       </div>
 
       {/* Main Grid */}
-      <div style={styles.main}>
-        <div style={styles.leftPanel}>
+      <div style={styles.main} className="app-main">
+        <div style={styles.leftPanel} className="app-sidebar">
           <div style={styles.sidebarSection}>
             <div style={styles.stepBadge}>1</div>
             <div style={styles.sidebarTitle}>{labels.uploadTitle}</div>
@@ -2323,10 +2885,10 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
           
           <div style={styles.modeToggle}>
             <button onClick={() => setMode("text")} style={mode === "text" ? {...styles.modeBtn, ...styles.modeBtnActive} : styles.modeBtn}>
-              {labels.pasteText}
+              <Type size={15} /> {plainLabel(labels.pasteText)}
             </button>
             <button onClick={() => setMode("pdf")} style={mode === "pdf" ? {...styles.modeBtn, ...styles.modeBtnActive} : styles.modeBtn}>
-              {labels.upload}
+              <Upload size={15} /> {plainLabel(labels.upload)}
             </button>
           </div>
 
@@ -2334,7 +2896,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Paste your official German letter here..."
+              placeholder={labels.letterPlaceholder || UI_LABELS.English.letterPlaceholder}
               style={styles.textarea}
               rows={10}
             />
@@ -2348,11 +2910,11 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
               <input 
                 type="file" 
                 ref={fileInputRef} 
-                accept=".pdf,image/*" 
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
                 style={{ display: "none" }} 
                 onChange={handleFileSelect} 
               />
-              <div style={styles.dropIcon}>📄</div>
+              <div style={styles.dropIcon}><Upload size={30} strokeWidth={1.5} /></div>
               <div style={styles.dropText}>{labels.dropText}</div>
               <div style={styles.dropSubtext}>{labels.dropSubtext}</div>
               {file && <div style={styles.fileName}>✓ {file.name}</div>}
@@ -2360,7 +2922,8 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
           )}
 
           <button style={styles.analyzeBtn} onClick={analyzeLetter} disabled={loading}>
-            {loading ? "⏳ Analyzing..." : labels.analyzeBtn}
+            <Sparkles size={16} />
+            {loading ? (labels.analyzing || UI_LABELS.English.analyzing) : plainLabel(labels.analyzeBtn)}
           </button>
 
           {loading && (
@@ -2371,15 +2934,62 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
           )}
 
           <div style={styles.privacyNote}>
-            <span>🔒</span>
+            <LockKeyhole size={14} />
             <span>{labels.privacy}</span>
           </div>
 
-          {sessionLetterCount > 0 && (
-            <div style={styles.sessionNote}>
-              {sessionLetterCount} {sessionLetterCount === 1 ? labels.lettersAnalyzed : labels.lettersAnalyzedPlural}
+          <section style={styles.historySection} aria-label={historyUi.title}>
+            <div style={styles.historyHeader}>
+              <div style={styles.historyTitle}><History size={14} /> {historyUi.title}</div>
+              {recentLetters.length > 0 && (
+                <button
+                  type="button"
+                  style={styles.historyClear}
+                  onClick={clearLetterHistory}
+                  disabled={loading || isTranslating || isStreaming}
+                >
+                  {historyUi.clear}
+                </button>
+              )}
             </div>
-          )}
+            {recentLetters.length === 0 ? (
+              <div style={styles.historyEmpty}>{historyUi.empty}</div>
+            ) : (
+              <div style={styles.historyList}>
+                {recentLetters.map((letter) => {
+                  const isActive = letter.id === activeLetterId;
+                  return (
+                    <div key={letter.id} style={{ ...styles.historyItem, ...(isActive ? styles.historyItemActive : {}) }}>
+                      <button
+                        type="button"
+                        style={styles.historySelect}
+                        onClick={() => switchLetter(letter.id)}
+                        disabled={loading || isTranslating || isStreaming}
+                      >
+                        <span style={styles.historySender}>{letter.sender || (outputLanguage === "German" ? "Unbekannter Absender" : outputLanguage === "Persian" ? "فرستنده نامشخص" : "Unknown sender")}</span>
+                        <span style={styles.historyTopic}>{letter.topic || (outputLanguage === "German" ? "Offizieller Brief" : outputLanguage === "Persian" ? "نامه رسمی" : "Official letter")}</span>
+                        <span style={styles.historyMeta}>
+                          <span>{letter.analyzedAt}</span>
+                          {isActive && <span style={styles.historyCurrent}>{historyUi.current}</span>}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        style={styles.historyRemove}
+                        onClick={() => removeLetter(letter.id)}
+                        disabled={loading || isTranslating || isStreaming}
+                        aria-label={historyUi.remove}
+                        title={historyUi.remove}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <small style={styles.historyPrivacy}>{historyUi.privacy}</small>
+          </section>
         </div>
 
         <div style={styles.rightPanel}>
@@ -2389,15 +2999,22 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
               <div style={styles.stepBadgeLabel}>{labels.analysisResult}</div>
             </div>
 
-            {!result && !loading && (
+            {analysisError && !loading && (
+              <div style={styles.analysisError} role="alert">
+                <strong>⚠️</strong>
+                <span>{analysisError}</span>
+              </div>
+            )}
+
+            {!result && !loading && !isTranslating && !analysisError && (
               <div style={styles.emptyState}>
-                <div style={styles.emptyIcon}>📄</div>
+                <div style={styles.emptyIcon}><FileText size={44} strokeWidth={1.4} /></div>
                 <div style={styles.emptyTitle}>{labels.emptyTitle}</div>
                 <div style={styles.emptySub}>{labels.emptySub}</div>
               </div>
             )}
 
-            {loading && !result && (
+            {(loading || isTranslating) && !result && (
               <div>
                 <div style={styles.skeletonCard}></div>
                 <div style={styles.skeletonCard}></div>
@@ -2407,14 +3024,16 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
             {result && (
               <>
                 <div style={styles.bottomLineCard}>
-                  <div style={styles.blLabel}>{labels.bottomLine}</div>
+                  <div style={{ ...styles.blLabel, display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Sparkles size={14} /> {plainLabel(labels.bottomLine)}
+                  </div>
                   <div style={styles.blText}>
                     {isTranslating ? (
                       <span style={{ opacity: 0.6, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span className="spinner">⟳</span> {labels.translating}
                       </span>
                     ) : (
-                      `"${animatedSummary || result.tldr}"`
+                      animatedSummary || result.tldr
                     )}
                   </div>
                   <div style={styles.bridgeLine}>
@@ -2423,20 +3042,20 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                 </div>
 
                 <div style={styles.metaRow}>
-                  <span style={styles.metaItem}>📧 {result.sender || "Unknown sender"}</span>
-                  <span style={styles.metaItem}>🏷️ {result.letter_topic || "Official letter"}</span>
-                  <span style={styles.urgencyBadge}>● {result.urgency_level || "Medium"} {labels.urgency}</span>
+                  <span style={styles.metaItem}><Mail size={14} /> {result.sender || "Unknown sender"}</span>
+                  <span style={styles.metaItem}><Tag size={14} /> {result.letter_topic || "Official letter"}</span>
+                  <span style={styles.urgencyBadge}>● {localizedLevel(result.urgency_level)} {labels.urgency}</span>
                   {result.letter_involves_payment && (
-                    <span style={styles.paymentBadge}>{labels.paymentInvolved}</span>
+                    <span style={styles.paymentBadge}><CreditCard size={13} /> {plainLabel(labels.paymentInvolved)}</span>
                   )}
                   {result.is_valid_letter === false && (
                     <span style={styles.warningBadge}>{labels.mayNotBeOfficial}</span>
                   )}
                 </div>
 
-                {daysLeft && (
+                {daysLeft !== null && (
                   <div style={styles.deadlineBar}>
-                    ⏰ {daysLeft} {labels.daysLeft}
+                    <CalendarClock size={16} /> {daysLeft} {labels.daysLeft}
                   </div>
                 )}
 
@@ -2481,13 +3100,13 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                 )}
 
                 <div style={styles.safetyNote}>
-                  {labels.safety} {result.safety_note || "This is AI-generated help, not legal advice."}
+                  <ShieldCheck size={15} /> {result.safety_note || "This is AI-generated help, not legal advice."}
                 </div>
 
                 <div style={styles.actionRow}>
-                  <button style={styles.actionBtn} onClick={copyToClipboard}>{copied ? labels.copied : labels.copy}</button>
-                  <button style={styles.actionBtn} onClick={exportToPDF}>{labels.pdf}</button>
-                  <button style={styles.actionBtn} onClick={resetAnalysis}>{labels.new}</button>
+                  <button style={styles.actionBtn} onClick={copyToClipboard}><Copy size={14} /> {plainLabel(copied ? labels.copied : labels.copy)}</button>
+                  <button style={styles.actionBtn} onClick={exportToPDF}><Download size={14} /> {plainLabel(labels.pdf)}</button>
+                  <button style={styles.actionBtn} onClick={resetAnalysis}><RotateCcw size={14} /> {plainLabel(labels.new)}</button>
                 </div>
               </>
             )}
@@ -2498,39 +3117,41 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       {/* Floating Chat Button */}
       <button
         style={styles.chatButton}
+        aria-label={isChatOpen ? "Close chat" : "Open chat"}
         onMouseEnter={(e) => {
-          e.currentTarget.style.transform = "scale(1.1)";
-          e.currentTarget.style.boxShadow = "0 12px 40px rgba(124,58,237,0.6)";
+          e.currentTarget.style.transform = "translateY(-2px)";
+          e.currentTarget.style.boxShadow = "0 10px 28px rgba(0,0,0,0.22)";
         }}
         onMouseLeave={(e) => {
           e.currentTarget.style.transform = "scale(1)";
-          e.currentTarget.style.boxShadow = "0 8px 30px rgba(124,58,237,0.4)";
+          e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.18)";
         }}
         onClick={() => setIsChatOpen(!isChatOpen)}
       >
-        {isChatOpen ? "✕" : "💬"}
+        <MessageSquare size={21} />
         {!isChatOpen && chatMessages.length > 1 && (
           <span style={styles.badge}>{chatMessages.length - 1}</span>
         )}
       </button>
 
       {/* Floating Chat Window */}
-      <div style={styles.chatWindow}>
+      <div style={styles.chatWindow} className="app-chat-window">
         <div style={styles.chatWindowHeader}>
           <div style={styles.chatWindowHeaderLeft}>
-            <span>🤖</span>
+            <Bot size={20} color="#4f46e5" />
             <div>
-              <div style={styles.chatWindowHeaderTitle}>{labels.chatTitle}</div>
+              <div style={styles.chatWindowHeaderTitle}>{plainLabel(labels.chatTitle)}</div>
               <div style={styles.chatWindowHeaderSub}>{labels.chatSub}</div>
             </div>
           </div>
           <button
             style={styles.chatWindowClose}
+            aria-label="Close chat"
             onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.8")}
             onClick={() => setIsChatOpen(false)}
           >
-            ✕
+            <X size={19} />
           </button>
         </div>
 
@@ -2546,7 +3167,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
               }}
             >
               {msg.role === "assistant" && (
-                <div style={styles.chatAvatar}>AI</div>
+                <div style={styles.chatAvatar}><Bot size={16} /></div>
               )}
               <div>
                 <div
@@ -2557,7 +3178,36 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                       : styles.chatBubbleAssistant),
                   }}
                 >
-                  {msg.content}
+                  {msg.isDraft ? (
+                    <div>
+                      <div style={styles.draftLabel}>{replyUi.draftLabel}</div>
+                      <textarea
+                        value={msg.content}
+                        onChange={(event) => updateDraftMessage(idx, event.target.value)}
+                        style={styles.draftEditor}
+                        dir="ltr"
+                        aria-label={replyUi.draftLabel}
+                      />
+                      <div style={styles.draftHint}>{replyUi.editHint}</div>
+                      <div style={{ ...styles.replyComposerActions, marginTop: "8px" }}>
+                        <button
+                          type="button"
+                          style={styles.replySecondaryBtn}
+                          onClick={() => copyDraftMessage(idx, msg.content)}
+                        >
+                          <Copy size={13} /> {copiedDraftIndex === idx ? replyUi.copied : replyUi.copy}
+                        </button>
+                        <button
+                          type="button"
+                          style={styles.replySecondaryBtn}
+                          onClick={() => generateReplyDraft(msg.draftIntent, msg.draftContext)}
+                          disabled={isStreaming}
+                        >
+                          <RefreshCw size={13} /> {replyUi.regenerate}
+                        </button>
+                      </div>
+                    </div>
+                  ) : msg.content}
                   {msg.isOptions && (
                     <div style={{ display: "flex", gap: "6px", marginTop: "8px", flexWrap: "wrap" }}>
                       {msg.options?.map((opt) => (
@@ -2565,16 +3215,16 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                           key={opt}
                           style={{
                             padding: "4px 12px",
-                            borderRadius: "20px",
-                            border: "1px solid #7c3aed",
-                            background: "#ede9fe",
-                            color: "#7c3aed",
+                            borderRadius: "6px",
+                            border: "1px solid #4f46e5",
+                            background: darkMode ? "#312e81" : "#eef2ff",
+                            color: darkMode ? "#e0e7ff" : "#3730a3",
                             fontSize: "11px",
                             cursor: "pointer",
                           }}
                           onClick={() => handleReplyOptionClick(opt)}
                         >
-                          {opt}
+                          {localizedReplyOption(opt)}
                         </button>
                       ))}
                     </div>
@@ -2592,6 +3242,40 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
               )}
             </div>
           ))}
+          {replyDraftIntent && !isStreaming && (
+            <div style={styles.replyComposer}>
+              <div style={styles.replyComposerTitle}>{localizedReplyOption(replyDraftIntent)}</div>
+              <label style={styles.replyComposerLabel} htmlFor="reply-draft-context">
+                {replyUi.detailsLabel}
+              </label>
+              <textarea
+                id="reply-draft-context"
+                value={replyDraftContext}
+                onChange={(event) => setReplyDraftContext(event.target.value)}
+                maxLength={1_000}
+                placeholder={replyUi.detailsPlaceholder}
+                style={styles.replyComposerTextarea}
+              />
+              <div style={styles.replyComposerFooter}>
+                <span style={styles.replyComposerLabel}>{replyDraftContext.length}/1000</span>
+                <div style={styles.replyComposerActions}>
+                  <button
+                    type="button"
+                    style={styles.replySecondaryBtn}
+                    onClick={() => {
+                      setReplyDraftIntent(null);
+                      setReplyDraftContext("");
+                    }}
+                  >
+                    {replyUi.cancel}
+                  </button>
+                  <button type="button" style={styles.replyPrimaryBtn} onClick={submitReplyDraft}>
+                    {replyUi.generate}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {isStreaming && streamingMessage && (
             <div style={{ ...styles.chatMessageWrapper, ...styles.chatMessageWrapperAssistant }}>
               <div style={styles.chatAvatar}>AI</div>
@@ -2605,10 +3289,10 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
           )}
           {chatError && (
             <div style={{ ...styles.chatMessageWrapper, ...styles.chatMessageWrapperAssistant }}>
-              <div style={styles.chatAvatar}>⚠️</div>
+              <div style={{ ...styles.chatAvatar, background: "#dc2626" }}><AlertTriangle size={16} /></div>
               <div>
                 <div style={{ ...styles.chatBubble, ...styles.chatBubbleAssistant, background: darkMode ? "#2a1414" : "#fee2e2", color: "#dc2626" }}>
-                  ❌ {chatError}
+                  {chatError}
                 </div>
               </div>
             </div>
@@ -2620,12 +3304,13 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
         <div style={{ padding: "0 16px", background: darkMode ? "#1e293b" : "white" }}>
           <div style={styles.chatSuggestions}>
             {labels.suggestions.map((sug, i) => (
-              <div
+              <button
+                type="button"
                 key={i}
                 style={styles.chatSuggestion}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "#7c3aed";
-                  e.currentTarget.style.color = "#7c3aed";
+                  e.currentTarget.style.borderColor = "#4f46e5";
+                  e.currentTarget.style.color = "#4f46e5";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.borderColor = darkMode ? "#475569" : "#e5e7eb";
@@ -2634,7 +3319,7 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
                 onClick={() => handleSuggestionClick(sug)}
               >
                 {sug}
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -2645,8 +3330,8 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
             type="text"
             value={chatInput}
             onChange={(e) => setChatInput(e.target.value)}
-            onKeyPress={(e) => e.key === "Enter" && sendChatMessage()}
-            placeholder={!result ? labels.analyzeFirst || "📄 Analyze a letter first to start chatting..." : (labels.typeMessage || labels.placeholder)}
+            onKeyDown={(e) => e.key === "Enter" && sendChatMessage()}
+            placeholder={!result ? plainLabel(labels.analyzeFirst || "Analyze a letter first to start chatting...") : (labels.typeMessage || labels.placeholder)}
             style={styles.chatWindowInputField}
             disabled={isStreaming || !result}
           />
@@ -2657,8 +3342,10 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
             }}
             onClick={sendChatMessage}
             disabled={isStreaming || !chatInput.trim() || !result}
+            aria-label={labels.send || "Send"}
+            title={labels.send || "Send"}
           >
-            {labels.send || "Send"}
+            <Send size={16} />
           </button>
         </div>
       </div>
@@ -2667,12 +3354,25 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
       {showAbout && (
         <div style={styles.modalOverlay} onClick={() => setShowAbout(false)}>
           <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <h3>{labels.aboutTitle}</h3>
-            <p><strong>Version:</strong> 3.0</p>
-            <p>{labels.aboutFeatures}</p>
-            <p>{labels.aboutPrivacy}</p>
-            <p>{labels.aboutDisclaimer}</p>
-            <button style={styles.modalClose} onClick={() => setShowAbout(false)}>{labels.close}</button>
+            <h3 style={styles.modalTitle}><FileText size={22} /> {plainLabel(labels.aboutTitle)}</h3>
+            <p style={styles.modalDescription}>{aboutUi.description}</p>
+            {aboutUi.capabilities.length > 0 && (
+              <section style={styles.modalSection}>
+                <h4 style={styles.modalSectionTitle}>{aboutUi.capabilitiesTitle}</h4>
+                <ul style={styles.modalList}>
+                  {aboutUi.capabilities.map((capability) => <li key={capability}>{capability}</li>)}
+                </ul>
+              </section>
+            )}
+            <section style={styles.modalSection}>
+              {aboutUi.privacyTitle && <h4 style={styles.modalSectionTitle}>{aboutUi.privacyTitle}</h4>}
+              <p style={styles.modalText}>{aboutUi.privacy}</p>
+            </section>
+            <section style={styles.modalSection}>
+              {aboutUi.limitsTitle && <h4 style={styles.modalSectionTitle}>{aboutUi.limitsTitle}</h4>}
+              <p style={styles.modalText}>{aboutUi.limits}</p>
+            </section>
+            <button style={styles.modalClose} onClick={() => setShowAbout(false)}>{plainLabel(labels.close)}</button>
           </div>
         </div>
       )}
@@ -2704,6 +3404,42 @@ ${(result.useful_details || []).map(u => `• ${u}`).join('\n') || "None"}
           display: inline-block;
           animation: spin 1s linear infinite;
           font-size: 18px;
+        }
+        @media (max-width: 1100px) {
+          .app-main {
+            margin-right: 0 !important;
+            margin-left: 0 !important;
+          }
+        }
+        @media (max-width: 760px) {
+          .app-topbar {
+            align-items: flex-start !important;
+            flex-direction: column !important;
+            gap: 12px !important;
+          }
+          .app-topbar > div:last-child {
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) auto auto !important;
+            width: 100% !important;
+            gap: 6px !important;
+          }
+          .app-main {
+            display: block !important;
+          }
+          .app-sidebar {
+            border-right: 0 !important;
+            border-bottom: 1px solid #334155 !important;
+            max-height: none !important;
+            overflow-y: visible !important;
+            position: static !important;
+          }
+          .app-chat-window {
+            inset: 12px !important;
+            width: auto !important;
+            height: auto !important;
+            max-height: none !important;
+            border-radius: 8px !important;
+          }
         }
       `}</style>
     </div>

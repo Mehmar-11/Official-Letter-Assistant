@@ -1,7 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import CORS_ORIGINS
 from app.routes.analysis import router as analysis_router
+from app.services.llm_service import check_llm_config
 
 app = FastAPI(
     title="Official Letter Assistant API",
@@ -9,25 +11,14 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# ✅ CORS - Updated with all frontend URLs
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Local development
-        "http://localhost:3000",  # Alternative local
-        "https://official-letter-assistant.vercel.app",  # Your production frontend
-        "https://*.vercel.app",  # All Vercel deployments
-        "https://official-letter-assistant-git-*.vercel.app",  # Preview deployments
-        "https://official-letter-assistant-backend.onrender.com",  # Your backend itself
-    ],
+    allow_origins=list(CORS_ORIGINS),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],
-    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
-# Routes
 app.include_router(analysis_router)
 
 
@@ -39,3 +30,13 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness_check():
+    if not check_llm_config():
+        raise HTTPException(
+            status_code=503,
+            detail="The language model service is not configured.",
+        )
+    return {"status": "ready"}

@@ -13,8 +13,8 @@ The demo should show the full end-to-end workflow of Letter Assistant:
 1. Upload or paste a German official letter.
 2. Generate a structured analysis.
 3. Review urgency, deadlines, required actions, payment details, and safety information.
-4. Ask guided follow-up questions.
-5. Use open chat for letter-specific questions.
+4. Use a quick prompt or enter a letter-specific question in open chat.
+5. Show the streamed, grounded response.
 6. Generate a formal German reply draft.
 7. Demonstrate multilingual output where appropriate.
 
@@ -38,13 +38,13 @@ The final flow will be adjusted after the presentation plan is finalized.
 
 Suggested structure:
 
-1. Start from the landing page.
+1. Open the single-page analysis workspace.
 2. Upload the selected demo letter.
 3. Show the structured analysis result.
 4. Highlight urgency, deadlines, required actions, and confidence level.
 5. Switch output language if relevant.
-6. Ask one guided follow-up question.
-7. Ask one open chat question.
+6. Use one quick prompt in the chat panel.
+7. Ask one short open-chat question only if it adds a different fact.
 8. Generate one formal German reply draft.
 9. Briefly explain that the system is grounded in the uploaded letter and validated structured analysis.
 
@@ -56,7 +56,7 @@ During the demo, the presenter should emphasize:
 
 - The system is not a general chatbot; it is grounded in the uploaded letter.
 - The first layer extracts structured facts from the letter.
-- Follow-up, chat, and reply generation reuse the validated analysis.
+- Chat and reply generation reuse the validated analysis; open chat also receives the original letter text for questions that exceed the flat schema.
 - The system supports text, PDF, and image input.
 - The system supports multilingual explanation output.
 - The generated reply remains formal German.
@@ -73,7 +73,7 @@ Possible notes to add later:
 
 - which exact file to upload
 - which output language to select
-- which guided question to click
+- which quick chat prompt to click
 - which chat question to ask
 - which reply intent to choose
 - expected result screenshots or talking points
@@ -88,4 +88,3 @@ If the deployed version is unavailable during the presentation:
 2. Run the backend locally.
 3. Use the same demo letter.
 4. Show screenshots or exported PDF results if live API access fails.
-

@@ -1,9 +1,11 @@
+import json
 import re
+from datetime import date
 from typing import Optional, Union
 
 from app.schemas.common import OutputLanguage
 from app.schemas.analysis import AnalyzeTextResponse, InvalidLetterResponse
-from app.services.llm_service import analyze_letter_with_llm
+from app.services.llm_service import analyze_letter_with_llm, extract_calendar_dates
 
 CONFIDENCE_REASON_TEXTS = {
     "text_too_short": {
@@ -219,6 +221,22 @@ def calculate_reliability(
     return "high", get_confidence_reason("clear_details", output_language)
 
 
+def validate_grounded_dates(letter_text: str, llm_result: dict) -> None:
+    """Reject exact output dates that are absent from the source letter."""
+    source_dates = extract_calendar_dates(letter_text)
+    allowed_dates = source_dates | {date.today().isoformat()}
+    output_dates = extract_calendar_dates(
+        json.dumps(llm_result, ensure_ascii=False)
+    )
+    unsupported_dates = sorted(output_dates - allowed_dates)
+
+    if unsupported_dates:
+        raise ValueError(
+            "Analysis contains dates not grounded in the source letter: "
+            + ", ".join(unsupported_dates)
+        )
+
+
 def analyze_letter_text(
     letter_text: str,
     output_language: OutputLanguage = "English",
@@ -236,6 +254,7 @@ def analyze_letter_text(
             )
         )
 
+    validate_grounded_dates(letter_text, llm_result)
     llm_result.pop("message", None)
     llm_result["letter_text"] = letter_text
 

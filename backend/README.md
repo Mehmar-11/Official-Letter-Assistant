@@ -62,12 +62,14 @@ python3 -m uvicorn app.main:app --reload
 | `/analyze-pdf` | POST | Analyze uploaded PDF or image (JPEG, PNG) |
 | `/follow-up` | POST | Answer one of four guided questions |
 | `/chat` | POST | Stream grounded open-chat responses using SSE |
-| `/reply-draft` | POST | Generate one complete formal German reply |
+| `/reply-draft` | POST | Generate one formal German reply from a safe intent and optional bounded context |
 | `/translate` | POST | Re-translate an existing analysis into a different language |
 | `/health` | GET | Check backend availability |
 | `/ready` | GET | Check whether the LLM provider is configured |
 
-All user-facing endpoints accept an optional `output_language` parameter (default: `"English"`). 16 languages supported.
+Analysis, follow-up, and chat accept an optional `output_language` parameter
+(default: `"English"`), and `/translate` requires a target language. Sixteen
+languages are supported. `/reply-draft` intentionally returns formal German.
 
 Full API reference: [../docs/API.md](../docs/API.md)
 
@@ -114,6 +116,16 @@ python3 evaluation/run_stability_analysis.py
 ```
 
 Results saved to `evaluation/results/`. See [../docs/EVALUATION.md](../docs/EVALUATION.md) for methodology.
+
+## Tests
+
+```bash
+python3 -m unittest discover -s tests -q
+```
+
+The backend suite covers API contracts, SSE behavior, input and runtime limits,
+provider configuration, CORS, reply drafting, translation confidence reasons,
+and deterministic date grounding.
 
 ---
 

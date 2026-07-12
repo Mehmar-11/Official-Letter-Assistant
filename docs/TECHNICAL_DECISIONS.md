@@ -93,6 +93,7 @@ This document records engineering and product decisions that shaped the Letter A
 - API keys are stored in `.env` and excluded from version control
 - Translation operates on the validated structured analysis rather than re-processing the original letter, reducing unnecessary LLM work and keeping translated outputs consistent with the original analysis
 - Every valid analysis response includes a required safety-note field, and the prompt specifies its disclaimer content
+- The frontend may keep at most three analyzed letters in active-tab memory for navigation, but does not write letter data to persistent browser storage
 
 **Why**: Official German letters routinely contain personal identification numbers, financial details, immigration status, and legal references. These constraints are not optional — they are requirements for responsible handling of sensitive documents.
 
@@ -143,3 +144,22 @@ deployed Vercel URL.
 **Why**: Deployment URLs differ from local development URLs. Environment-based
 origins keep this operational detail out of route code while avoiding an open
 wildcard policy.
+
+---
+
+## 12. Deterministic Exact-Date Grounding
+
+**Decision**: The backend extracts calendar dates from the source letter,
+normalizes them to ISO form, supplies that allowed set to the analysis prompt,
+and rejects generated analyses containing an exact date that is absent from the
+source. The separately injected current date is allowed only because it supports
+urgency calculation.
+
+**Why**: Dates are high-impact facts. Schema-valid text can still contain a
+fluent but incorrect month or day, so Pydantic validation alone is insufficient.
+The deterministic check turns an unsupported date into a controlled validation
+failure instead of presenting it as a reliable deadline.
+
+**Trade-off**: The parser covers numeric dates plus common English and German
+written month forms. Unusual date expressions may still require additional
+normalization rules in a future version.

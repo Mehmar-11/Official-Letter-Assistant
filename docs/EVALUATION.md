@@ -16,8 +16,13 @@ Evaluation checks three layers:
 
 Each check produces one of:
 - **PASS** — all checks passed with no partial matches
-- **PARTIAL** — all checks passed but one or more keyword checks were semantic partial matches
-- **FAIL** — one or more checks failed
+- **PARTIAL** — at least 70% of checks were accepted, including semantic partial keyword matches, but the sample did not meet the full PASS condition
+- **FAIL** — fewer than 70% of checks were accepted
+
+All 10 saved golden-set requests use the `.txt` fixtures listed in
+`backend/evaluation/expected_outputs.json`. Companion PDF and PNG files are
+manual upload fixtures and are not guaranteed to contain byte-for-byte
+identical wording or dates; they are not inputs to the saved golden-set run.
 
 ---
 
@@ -63,7 +68,7 @@ Confidence is calculated by rule-based logic in `analysis_service.py`, not by th
 | Level | Condition |
 |-------|-----------|
 | low | Text under 200 chars, or required_actions empty with urgency ≠ Low, or both sender and topic unknown |
-| medium | Sender or topic unknown, or payment letter without IBAN/recipient |
+| medium | Sender or topic unknown, payment letter without a recognizable IBAN or recipient, or non-Low urgency without a deadline |
 | high | None of the above |
 
 ---
@@ -86,6 +91,12 @@ Because the system uses an LLM, individual runs may differ slightly. The table b
 | 10_vague_notice | high | Low | 9/9 | PASS |
 
 **PASS: 5 / PARTIAL: 5 / FAIL: 0**
+
+The stored result file reports 101 accepted checks out of 105 and no request
+errors. It was generated on 2026-07-06. The deterministic exact-date grounding
+guard was added later and is covered by unit and manual regression tests, but
+the saved 10-letter result should be rerun if that guard must be included in a
+new evaluation claim.
 
 The more meaningful signal is not the PASS count but the complete absence of FAILs and the stability of results across repeated runs.
 
@@ -112,7 +123,7 @@ We ran the full golden set 5 times to assess LLM output consistency:
 | 01_insurance | High High High Medium High | high high high high high | ⚠️ urgency |
 | 02_immigration | High High High High High | high high high high high | ✅ |
 | 03_university | High High High High High | high high high high high | ✅ |
-| 04_bank | High — High High High | high — medium medium medium | ✅ (1 network timeout) |
+| 04_bank | High — High High High | high — medium medium medium | ⚠️ timeout/confidence |
 | 05_finanzamt | High High High High High | high high high high high | ✅ |
 | 06_housing | High High High High High | high high high high high | ✅ |
 | 07_informational | Low Low Low Low Low | high high high high high | ✅ |
@@ -141,7 +152,10 @@ The letter involves a 5 EUR reminder fee as the only stated consequence. The mod
 
 **Synthetic data:** All 10 evaluation samples are synthetically generated. Real German official letters may contain layouts, abbreviations, or phrasing that differs from our test set.
 
-**Single-language evaluation:** All samples are in German. Multilingual output quality (Persian, Turkish, Arabic, etc.) is not measured in this evaluation.
+**Single-output-language evaluation:** All source samples are German and the
+saved evaluation requests use the default English output. Manual regression
+checks covered selected Persian and Chinese outputs, but multilingual quality
+is not benchmarked systematically.
 
 **Confidence rule proxy:** Confidence level is calculated by rule-based logic, not by measuring actual extraction quality. It is a proxy for reliability, not a direct measure.
 
@@ -157,11 +171,20 @@ The evaluation framework deliberately separates three types of failures:
 
 This distinction matters. A system that extracts the right facts but uses different wording is more useful than one that uses the right words but misses the key information. Our PARTIAL category captures this difference.
 
-The zero FAIL rate across all runs is the most important signal: the system never completely misunderstood a letter or hallucinated required actions where none existed. The informational letter (07) and the vague notice (10) were both handled correctly in every run — urgency Low, required_actions empty, no invented next steps.
+The zero FAIL count means no saved sample fell below the evaluation script's
+70% acceptance threshold. It does not prove the absence of hallucinations or
+establish real-world accuracy. The informational letter (07) and vague notice
+(10) are useful positive signals because their stored runs kept urgency Low and
+required actions empty.
 
 ### Conclusion
 
-Overall, the evaluation indicates that the Letter Assistant reliably extracts actionable information from official German letters. Remaining variability is concentrated in a small number of borderline reasoning cases rather than systematic extraction failures. This suggests that future improvements should primarily target reasoning calibration rather than information extraction.
+Within this synthetic 10-letter set, the results support the claim that the
+assistant usually extracts the expected actionable fields and handles the two
+no-action cases correctly. The evidence remains limited by synthetic data,
+English-only scoring, keyword-based checks, and the small sample size. Future
+evaluation should add human review, real anonymized letters with consent, and
+systematic multilingual scoring.
 ---
 
 ## How to Reproduce

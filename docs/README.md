@@ -27,8 +27,9 @@ Anyone living in Germany who receives official German letters but is not fully f
 - **Grounded open chat** — users can ask open-ended questions about the letter in their own language; all responses are grounded in the uploaded letter text and structured analysis, not general knowledge
 - **Multi-language chat** — replies use the output language explicitly selected by the user
 - **Reply draft assistant** — generates a formal German reply letter based on user intent and extracted letter facts
-- **Guided follow-up** — four pre-defined question cards (payment, documents, risks, careful points)
-- **Privacy by design** — no permanent storage; letter text and analysis are processed in memory only and not written to any database or persistent storage
+- **Quick chat prompts** — four suggested starting points routed through the grounded streaming chat
+- **Guided follow-up API** — optional backend endpoint for four bounded question types
+- **Privacy by design** — no server-side or persistent browser storage; up to three letters may remain temporarily in the active tab and disappear on refresh or tab close
 
 ---
 
@@ -50,7 +51,7 @@ Anyone living in Germany who receives official German letters but is not fully f
 ### Prerequisites
 
 - Python 3.9+
-- Node.js 18+
+- Node.js 20.19+ or 22.12+ (required by the current Vite version)
 - OpenAI API key
 
 ### Environment Variables
@@ -99,6 +100,18 @@ npm run dev
 
 Frontend runs at: `http://localhost:5173`
 
+### Verify the Project
+
+```bash
+cd backend
+python3 -m unittest discover -s tests -q
+
+cd ../frontend
+npm test
+npm run lint
+npm run build
+```
+
 ---
 
 ## Documentation
@@ -117,9 +130,9 @@ Frontend runs at: `http://localhost:5173`
 
 | Criterion | How We Address It |
 |---|---|
-| **Core functionality** | End-to-end workflow: upload letter (text, PDF, or image) → structured analysis → guided follow-up → grounded open chat → reply draft. Covered by demo scenarios and golden set evaluation. |
-| **LLM integration quality** | Two-layer prompting architecture, Pydantic validation at every LLM boundary, grounding strictly in letter text and structured analysis, rule-based confidence level (not LLM-generated), streaming, safety notes on every response. |
-| **Engineering practice** | FastAPI with clear route/service/schema separation, Pydantic schema validation before UI rendering, controlled error handling, bounded uploads and model output, environment-based CORS and provider configuration, and golden set evaluation. |
-| **User experience** | Structured result cards, guided question cards, grounded open chat with multi-language support, reply draft with smart placeholders, analysis quality label, clear privacy notice, and dark mode UI. |
+| **Core functionality** | End-to-end workflow: upload letter (text, PDF, or image) → structured analysis → quick prompts or grounded open chat → editable German reply draft. The backend also exposes a bounded guided follow-up API. |
+| **LLM integration quality** | Two-layer prompting architecture, strict schemas for structured LLM outputs, grounding in letter text and validated analysis, deterministic exact-date validation, rule-based confidence, streaming chat, and required safety guidance. |
+| **Engineering practice** | FastAPI route/service/schema separation, controlled errors, bounded inputs and outputs, explicit CORS and provider configuration, 33 backend tests, 11 frontend tests, lint/build verification, GitHub Actions CI for every push and pull request to `main`, and a reproducible golden-set evaluation. |
+| **User experience** | Single-page workflow, structured result cards, grounded open chat with multi-language support, editable reply drafting, temporary three-letter history, analysis quality label, clear privacy notice, and dark mode UI. |
 | **Documentation** | API reference, architecture diagram, LLM design decisions, golden set evaluation, demo guide — all in the `docs/` folder. |
-| **Innovation & ethics** | No permanent storage (session-only), synthetic demo data, input verification to reject non-letter content, safety note on every analysis, rule-based confidence label to prevent over-trust in LLM output. |
+| **Innovation & ethics** | No permanent storage, temporary tab-only history, synthetic demo data, non-letter rejection, required safety guidance, and a rule-based confidence label to reduce over-trust. Letter content is still transmitted to OpenAI and this limitation is documented explicitly. |

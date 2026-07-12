@@ -294,6 +294,7 @@ def reply_draft(request: ReplyDraftRequest):
         draft = generate_reply_draft(
             analysis=request.analysis.model_dump(),
             intent=REPLY_INTENT_INSTRUCTIONS[request.intent],
+            additional_context=request.additional_context or "",
         )
         return ReplyDraftResponse(reply=draft)
     except LLMConfigurationError as error:

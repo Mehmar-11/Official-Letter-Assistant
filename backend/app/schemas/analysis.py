@@ -1,4 +1,4 @@
-from typing import Annotated, List, Literal
+from typing import Annotated, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -128,10 +128,15 @@ ReplyIntent = Literal[
 
 
 class ReplyDraftRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     analysis: AnalyzeTextResponse
     intent: ReplyIntent
+    additional_context: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=1_000,
+    )
 
 
 class ReplyDraftResponse(BaseModel):

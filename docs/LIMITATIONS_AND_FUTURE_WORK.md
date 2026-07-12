@@ -30,9 +30,11 @@ in `EVALUATION.md` quantifies this effect: 8 out of 10 evaluation
 samples were fully stable across 5 repeated runs, but 2 samples showed
 urgency variation.
 
-This is a property of the underlying model, not a fixable bug. The
-system mitigates it through explicit prompt rules and a rule-based
-confidence label, but cannot eliminate it entirely.
+This is a property of the underlying model and cannot be eliminated entirely.
+The system mitigates it through explicit prompt rules, a rule-based confidence
+label, strict structured-output validation, and deterministic rejection of
+exact calendar dates that are absent from the source letter. Other wording and
+reasoning variation can still occur.
 
 ### Supported Document Types
 
@@ -48,21 +50,23 @@ lower-quality analysis.
 
 ### Language Support
 
-Analysis output is available in 16 languages. However, output quality
-was primarily evaluated in English. Translation quality for less common
-languages (e.g. Polish, Korean, Dutch) has not yet been systematically
-evaluated across all supported languages.
+Analysis output is available in 16 languages. The saved golden-set evaluation
+uses English output. Manual regression checks covered selected Persian and
+Chinese outputs, but translation quality — especially for languages such as
+Polish, Korean, and Dutch — has not been benchmarked systematically.
 
 The original letter must be in German. Non-German input is rejected by
 the letter verification step.
 
 ### Privacy Considerations
 
-Letter content is processed in memory only and never stored. However,
-the system relies on the OpenAI API, which means letter content is
-transmitted to a third-party service. Users handling highly sensitive
-documents (immigration decisions, medical letters, legal disputes)
-should be aware of this.
+Letter content is processed in application memory and is not written to a
+database or persistent browser storage. The frontend may keep up to three
+letters temporarily in the active tab; refreshing or closing the tab clears
+that history. The system relies on the OpenAI API, so letter content is
+transmitted to a third-party service. Users handling highly sensitive documents
+(immigration decisions, medical letters, legal disputes) should be aware of
+this.
 
 The current implementation is stateless and does not include user
 accounts or authenticated multi-user sessions. In a shared deployment,
@@ -140,12 +144,14 @@ planned as short-term additions:
 -   **Legal advice**: The system explains what a letter says, not what
     the user should legally do. This boundary is enforced by a fixed
     safety note on every response and explicit prompt rules.
--   **German language input from users**: The chat and follow-up
-    interfaces accept input in any language, but the letter itself must
-    be in German.
+-   **Non-German source letters**: Chat can accept questions in different
+    languages, but the uploaded or pasted official letter itself must be in
+    German.
 -   **Persistent storage**: The system is designed as a stateless,
-    privacy-first tool. Adding a database, user accounts, or letter
-    history would require a significant redesign of the privacy model.
+    privacy-first tool. The current frontend history is limited to three
+    letters in the active tab and disappears on refresh or tab close. Adding
+    durable cross-device history, a database, or user accounts would require
+    a significant redesign of the privacy model.
 -   **Real-time letter fetching**: The system requires the user to
     upload or paste a letter manually. Integration with email providers
     or postal APIs is outside scope.

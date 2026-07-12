@@ -4,7 +4,10 @@ This folder contains fully synthetic sample letters for developing, testing, and
 
 The samples must not contain real personal data. Use placeholder names, addresses, case numbers, student IDs, payment references, and other identifiers.
 
-Some sample letters may also have text-based PDF versions for testing PDF extraction. These PDFs must also be synthetic.
+Some scenarios also have PDF and PNG companions for manual upload and OCR
+testing. A companion file may represent a slightly different synthetic version
+of the same scenario; the golden-set source of truth is the exact file path in
+`evaluation/expected_outputs.json`, currently 10 text fixtures.
 
 ## Folder Structure
 
@@ -49,6 +52,11 @@ Suggested test order:
 
 The current backend response schema includes:
 
+- `is_valid_letter`
+- `letter_text`
+- `confidence_level`
+- `confidence_reason`
+- `letter_involves_payment`
 - `sender`
 - `sender_type`
 - `urgency_level`
@@ -85,8 +93,9 @@ For each sample response, check whether the system:
 - keeps required documents inside `required_documents`
 - keeps practical user-facing wording short and frontend-friendly
 - assigns urgency based on the letter content and the injected current date
+- rejects exact generated dates that are absent from the source letter
 - avoids legal advice
-- includes the fixed safety note
+- includes the required localized safety guidance
 - checks guided follow-up answers for the supported question types: `payment`, `documents`, `consequences`, and `careful`
 
 ## Cost-Control Rules
@@ -96,8 +105,6 @@ For each sample response, check whether the system:
 - Do not enable automatic retry in the first implementation.
 - Revise the prompt only based on observed failures.
 - If several samples fail in the same way, stop testing and revise the prompt or validation logic before making more API calls.
-
-## Demo Note
 
 ## Demo Note
 
