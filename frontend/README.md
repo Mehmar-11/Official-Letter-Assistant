@@ -1,113 +1,245 @@
-# Frontend — Letter Assistant
+# Frontend — Official Letter Assistant
 
-React frontend for the Letter Assistant application. Communicates with the FastAPI backend to analyze German official letters and present results in a structured, multilingual interface.
-
----
-
-## Tech Stack
-
-- React 19, Vite, JavaScript
-- Custom CSS (no framework)
-- jsPDF + html2canvas (PDF export)
+The frontend application for **Official Letter Assistant**, a React-based interface that enables users to analyze German official letters, view structured multilingual explanations, ask contextual follow-up questions, and generate reply drafts. The application communicates with a FastAPI backend through a REST API.
 
 ---
 
-## Setup
+# Technology Stack
+
+* **React 19**
+* **Vite**
+* **JavaScript**
+* **Custom CSS**
+* **jsPDF** & **html2canvas** (PDF export)
+
+---
+
+# Getting Started
+
+## Prerequisites
+
+* Node.js (recommended LTS version)
+* npm
+
+## Installation
 
 ```bash
 npm install
+```
+
+## Run the Development Server
+
+```bash
 npm run dev
-# → http://localhost:5173
 ```
 
-The frontend expects the backend at `http://localhost:8000` by default. Copy
-`.env.example` to an untracked `.env` file when a different local URL is
-needed:
+The application will be available at:
 
 ```
+http://localhost:5173
+```
+
+---
+
+# Environment Configuration
+
+By default, the frontend communicates with the backend at:
+
+```
+http://localhost:8000
+```
+
+To use a different backend, create a local `.env` file by copying the provided example:
+
+```bash
+cp .env.example .env
+```
+
+Then configure the API URL:
+
+```env
 VITE_API_URL=https://your-backend-url
 ```
 
-For Vercel, configure `VITE_API_URL` in the project environment variables.
-Do not commit the real `.env` file.
+> **Note:** Never commit your local `.env` file. Only `.env.example` should be tracked in version control.
+
+For Vercel deployments, configure `VITE_API_URL` as an Environment Variable within the project settings.
 
 ---
 
-## Application Structure
+# Application Overview
 
-The application is a single-page workflow at `/`. Users can paste or upload a
-letter, inspect its analysis, switch languages, ask grounded questions, and
-create a reply without moving between routes. Product details, privacy, and
-limitations are available from the **About** dialog.
+The application is implemented as a **single-page workflow**, allowing users to complete the entire letter analysis process without navigating between pages.
 
----
+Users can:
 
-## Features
+* Upload or paste a German official letter
+* Review a structured AI-generated analysis
+* Switch between supported languages
+* Ask grounded follow-up questions
+* Generate editable reply drafts
 
-**Input**
-- Paste letter text
-- Upload PDF or image (JPEG, PNG)
-- Explicit text or file input mode
-- File upload is the default input mode; pasted text remains one click away
-
-**Analysis display**
-- Animated typewriter summary
-- Sender, topic, urgency, payment, and analysis-quality indicators
-- Accordion sections for required actions, payment, documents, consequences, and careful points
-- Analysis quality label (confidence level)
-
-**Follow-up**
-- Four quick prompts routed through grounded open chat
-- Grounded open chat with streaming responses
-- Reply draft with three selectable intents, optional details, and an editable result
-
-**Language**
-- Language selector dropdown (16 languages)
-- All analysis fields and chat responses returned in the selected language
-- Chat history is kept separately per language, so switching languages does not translate or discard earlier conversations
-- Temporary-history controls are localized for all 16 supported interface languages
-
-**Utilities**
-- Copy analysis to clipboard
-- Export analysis as PDF
-- Dark mode by default with a persistent manual theme toggle
-- Temporary history for the three most recently analyzed letters
-- Switch between recent letters without another analysis call
-- Remove one letter or clear the complete temporary history
-
-**Temporary history and privacy**
-- Recent letters are held only in the memory of the current browser tab
-- No letter content is written to local storage, session storage, or a database; only the theme preference is persisted
-- Refreshing or closing the tab clears the history
-- Each saved letter keeps its own analysis, language, translations, and chat state
-
-**Error handling**
-- Network, upload validation, model availability, analysis, translation, chat, and reply-draft failures have distinct user-facing messages
-- Analysis and translation errors appear in the result area; chat and reply-draft errors appear in the chat panel
-- Error messages are localized in English, German, and Persian, with English as the fallback for other interface languages
-- Raw backend and browser error wording is not shown directly to users
+Additional information regarding privacy, limitations, and product details is available through the **About** dialog.
 
 ---
 
-## Backend Communication
+# Features
 
-All API calls use the base URL from `VITE_API_URL` or `http://localhost:8000`.
+## Letter Input
 
-| Action | Endpoint |
-|---|---|
-| Analyze text | `POST /analyze-text` |
-| Analyze PDF/image | `POST /analyze-pdf` |
-| Open chat | `POST /chat` |
-| Generate reply draft | `POST /reply-draft` |
-| Language switch | `POST /translate` |
+* Upload PDF, PNG, or JPEG files
+* Paste letter text directly
+* Toggle between file upload and text input modes
+* File upload is the default workflow
 
-Full API reference: [../docs/API.md](../docs/API.md)
+---
 
-The backend also exposes `POST /follow-up` for four bounded guided question
-types. The current frontend uses quick prompts through `/chat` instead of
-calling that endpoint directly.
+## Letter Analysis
 
-## Verification
+The analysis interface includes:
+
+* Animated typewriter summary
+* Sender identification
+* Topic classification
+* Urgency indicator
+* Payment information
+* Analysis confidence indicator
+
+Additional information is organized into expandable sections:
+
+* Required actions
+* Payment details
+* Required documents
+* Potential consequences
+* Important considerations
+
+---
+
+## Follow-up Assistance
+
+Users can continue interacting with the analyzed letter through:
+
+* Four predefined quick prompts
+* Streaming grounded chat responses
+* Context-aware conversation based on the current analysis
+
+---
+
+## Reply Draft Generation
+
+Generate professional reply drafts with:
+
+* Three selectable response intents
+* Optional custom instructions
+* Fully editable generated responses
+
+---
+
+## Multilingual Support
+
+The application supports **16 interface and output languages**.
+
+Features include:
+
+* Localized analysis results
+* Localized chat responses
+* Localized temporary history controls
+* Independent chat history for each language
+
+Switching languages preserves existing conversations rather than translating or overwriting them.
+
+---
+
+## Productivity Features
+
+* Copy analysis to the clipboard
+* Export analysis as PDF
+* Persistent dark mode with manual theme toggle
+* Temporary history for the three most recently analyzed letters
+* Switch between recent analyses without reprocessing
+* Remove individual history entries or clear the entire session
+
+---
+
+## Privacy
+
+User privacy is a core design consideration.
+
+* Letter content is stored only in the current browser tab's memory.
+* No analysis data is written to Local Storage, Session Storage, or a database.
+* Closing or refreshing the browser tab permanently clears temporary history.
+* Each stored letter maintains its own analysis, translations, selected language, and chat history.
+* Only the user's theme preference is persisted between sessions.
+
+---
+
+## Error Handling
+
+The application provides user-friendly, localized error messages for:
+
+* Network failures
+* Invalid uploads
+* Model availability
+* Analysis failures
+* Translation failures
+* Chat failures
+* Reply generation failures
+
+Supported localized error messages include:
+
+* English
+* German
+* Persian
+
+English is used as the default fallback language.
+
+Raw backend or browser error messages are intentionally hidden from end users.
+
+---
+
+# Backend Integration
+
+The frontend communicates with the backend using the base URL defined by:
+
+```
+VITE_API_URL
+```
+
+or
+
+```
+http://localhost:8000
+```
+
+## API Endpoints
+
+| Feature            | Endpoint             |
+| ------------------ | -------------------- |
+| Analyze text       | `POST /analyze-text` |
+| Analyze PDF/Image  | `POST /analyze-pdf`  |
+| Chat               | `POST /chat`         |
+| Reply Draft        | `POST /reply-draft`  |
+| Translate Analysis | `POST /translate`    |
+
+Although the backend also provides:
+
+```
+POST /follow-up
+```
+
+the current frontend routes predefined quick prompts through the `/chat` endpoint instead.
+
+For the complete API specification, refer to:
+
+```
+docs/API.md
+```
+
+---
+
+# Verification
+
+Run the following commands before submitting changes:
 
 ```bash
 npm test
@@ -117,7 +249,12 @@ npm run build
 
 ---
 
-## Deployment
+# Deployment
 
-- **Frontend:** https://official-letter-assistant.vercel.app
-- **Backend:** https://official-letter-assistant-backend.onrender.com
+## Production Frontend
+
+https://official-letter-assistant.vercel.app
+
+## Production Backend
+
+https://official-letter-assistant-backend.onrender.com
