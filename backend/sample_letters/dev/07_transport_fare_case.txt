@@ -1,0 +1,30 @@
+Metroverbund Seestadt GmbH
+Kundenservice Fahrgeld
+Postfach 1180
+67890 Seestadt
+
+Prüfnummer: EBE-61-8427
+Kontrolltag: 09.07.2026
+
+Seestadt, 10.07.2026
+
+Betreff: Erhöhtes Beförderungsentgelt - Prüfnummer EBE-61-8427
+
+Sehr geehrter Herr Okoro,
+
+bei einer Fahrausweiskontrolle am 09.07.2026 um 17:42 Uhr in der Linie U4 zwischen Markt und Hafen konnten Sie keinen gültigen Fahrausweis vorzeigen. Deshalb wurde ein erhöhtes Beförderungsentgelt von 60,00 EUR erfasst.
+
+Falls Sie am Kontrolltag ein gültiges persönliches Zeitabo hatten, laden Sie den Nachweis bis zum 23.07.2026 unter fahrgeld.metro-seestadt.example.invalid hoch. Wird der Nachweis anerkannt, reduziert sich der Betrag auf 7,00 EUR. Warten Sie in diesem Fall unsere Bestätigung mit den Zahlungsdaten ab und zahlen Sie die 60,00 EUR nicht zusätzlich.
+
+Wenn Sie keinen solchen Nachweis einreichen, überweisen Sie bitte 60,00 EUR bis zum 30.07.2026 an Metroverbund Seestadt GmbH.
+
+IBAN: DE00 5555 6666 7777 8888 00
+BIC: TESTDE55XXX
+Verwendungszweck: EBE-61-8427
+
+Geht weder ein anerkannter Nachweis noch die Zahlung rechtzeitig ein, können zusätzliche Mahnkosten entstehen. Eine allgemeine Monatskarte, die nicht persönlich auf Sie ausgestellt war, genügt für die Reduzierung nicht.
+
+Mit freundlichen Grüßen
+
+i. A. Nadine Falk
+Forderungsmanagement
