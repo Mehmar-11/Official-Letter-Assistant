@@ -152,6 +152,7 @@ Full reference: [docs/API.md](docs/API.md)
 
 | Document | Description |
 |---|---|
+| [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) | Completed project plan, scope, timeline, roles, risks, and final evidence |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Two-layer design, data flows, grounding strategy, validation |
 | [docs/API.md](docs/API.md) | Endpoint schemas, request/response examples, curl commands |
 | [docs/LLM_DECISIONS.md](docs/LLM_DECISIONS.md) | 11 LLM design decisions with rationale and trade-offs |
