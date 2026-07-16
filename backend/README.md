@@ -8,7 +8,7 @@ FastAPI backend for analyzing German official letters. Accepts text, PDF, and im
 
 - Python 3.9+, FastAPI, Pydantic
 - OpenAI GPT-4o (structured outputs, streaming, vision)
-- pdfplumber, PyMuPDF
+- pdfplumber, PyMuPDF, Pillow
 - python-dotenv, python-multipart
 
 ---
