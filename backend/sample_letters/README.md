@@ -48,6 +48,24 @@ Suggested test order:
 4. `information_notice_no_clear_deadline.txt`
    - Tests no-guessing behavior when there is no clear deadline, payment, or required action.
 
+5. `05_telecom_tariff_change.txt` / `05_telecom_tariff_change.pdf`
+   - Tests an optional cancellation deadline, a future recurring price, automatic SEPA debit, and the fact that no immediate transfer is required.
+
+6. `06_salary_overpayment.txt` / `06_salary_overpayment.pdf`
+   - Tests gross/net amount separation, a required repayment, an alternative instalment-contact deadline, payment details, and legally sensitive consequences.
+
+7. `07_transport_fare_case.txt` / `07_transport_fare_case.pdf`
+   - Tests conditional action paths, two possible payment amounts, a proof deadline, a separate payment deadline, and no double-payment advice.
+
+8. `08_daycare_place_offer.txt` / `08_daycare_place_offer.pdf`
+   - Tests sequential actions, two deadlines, required and conditional documents, an unknown appointment date, and no current payment obligation.
+
+9. `vitaplus_mahnung_demo.pdf`
+   - Tests an insurance contribution reminder with a returned-direct-debit fee, partial payment, remaining-balance calculation, payment and proof deadlines, payment reference, and possible reminder costs.
+
+10. `10_vehicle_safety_recall.txt` / `10_vehicle_safety_recall.pdf`
+    - Tests high urgency, two action deadlines, temporary safety instructions, required workshop documents, an appointment that is not yet fixed, and no payment obligation.
+
 ## Expected Response Fields
 
 The current backend response schema includes:

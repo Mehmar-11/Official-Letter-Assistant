@@ -116,12 +116,12 @@ npm run build
 
 ## Documentation
 
+- [Completed Project Plan](PROJECT_PLAN.md)
 - [Architecture & System Design](ARCHITECTURE.md)
 - [API Reference](API.md)
 - [Technical Decisions](TECHNICAL_DECISIONS.md)
 - [LLM Design Decisions](LLM_DECISIONS.md)
 - [Evaluation & Golden Set](EVALUATION.md)
-- [Demo Narrative](DEMO.md)
 - [Limitations & Future Work](LIMITATIONS_AND_FUTURE_WORK.md)
 
 ---
@@ -134,5 +134,5 @@ npm run build
 | **LLM integration quality** | Two-layer prompting architecture, strict schemas for structured LLM outputs, grounding in letter text and validated analysis, deterministic exact-date validation, rule-based confidence, streaming chat, and required safety guidance. |
 | **Engineering practice** | FastAPI route/service/schema separation, controlled errors, bounded inputs and outputs, explicit CORS and provider configuration, 33 backend tests, 11 frontend tests, lint/build verification, GitHub Actions CI for every push and pull request to `main`, and a reproducible golden-set evaluation. |
 | **User experience** | Single-page workflow, structured result cards, grounded open chat with multi-language support, editable reply drafting, temporary three-letter history, analysis quality label, clear privacy notice, and dark mode UI. |
-| **Documentation** | API reference, architecture diagram, LLM design decisions, golden set evaluation, demo guide — all in the `docs/` folder. |
+| **Documentation** | Completed project plan, API reference, architecture diagram, LLM design decisions, and golden set evaluation — all in the `docs/` folder. |
 | **Innovation & ethics** | No permanent storage, temporary tab-only history, synthetic demo data, non-letter rejection, required safety guidance, and a rule-based confidence label to reduce over-trust. Letter content is still transmitted to OpenAI and this limitation is documented explicitly. |

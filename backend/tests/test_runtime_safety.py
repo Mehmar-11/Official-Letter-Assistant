@@ -1,9 +1,12 @@
 import unittest
+import base64
+from io import BytesIO
 from unittest.mock import patch
 
 import fitz
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from PIL import Image
 from pydantic import ValidationError
 
 from app.config import MAX_LETTER_TEXT_CHARS, parse_cors_origins
@@ -16,7 +19,12 @@ from app.services.llm_service import (
     generate_reply_draft,
     require_llm_config,
 )
-from app.services.pdf_service import extract_text_from_pdf_bytes
+from app.services.pdf_service import (
+    MAX_OCR_IMAGE_EDGE,
+    extract_text_from_image_bytes,
+    extract_text_from_pdf_bytes,
+    prepare_image_for_ocr,
+)
 
 
 class RuntimeSafetyTests(unittest.TestCase):
@@ -125,6 +133,34 @@ class RuntimeSafetyTests(unittest.TestCase):
         with patch("app.services.pdf_service.MAX_PDF_PAGES", 1):
             with self.assertRaisesRegex(ValueError, "at most 1 pages"):
                 extract_text_from_pdf_bytes(pdf_bytes)
+
+    def test_phone_sized_jpeg_is_normalized_before_ocr(self):
+        image = Image.new("RGB", (4032, 3024), "white")
+        source = BytesIO()
+        image.save(source, format="JPEG", quality=95)
+
+        normalized = prepare_image_for_ocr(source.getvalue())
+
+        self.assertTrue(normalized.startswith(b"\xff\xd8\xff"))
+        with Image.open(BytesIO(normalized)) as prepared:
+            self.assertLessEqual(max(prepared.size), MAX_OCR_IMAGE_EDGE)
+
+    @patch("app.services.pdf_service.extract_text_from_image_with_llm")
+    def test_jpeg_upload_uses_matching_media_type(self, extract_mock):
+        extract_mock.return_value = "Extracted official letter text"
+        image = Image.new("RGB", (1200, 1600), "white")
+        source = BytesIO()
+        image.save(source, format="JPEG")
+
+        extracted = extract_text_from_image_bytes(source.getvalue())
+
+        self.assertEqual(extracted, "Extracted official letter text")
+        encoded_image = extract_mock.call_args.args[0]
+        self.assertTrue(base64.b64decode(encoded_image).startswith(b"\xff\xd8\xff"))
+        self.assertEqual(
+            extract_mock.call_args.kwargs["media_type"],
+            "image/jpeg",
+        )
 
 
 if __name__ == "__main__":

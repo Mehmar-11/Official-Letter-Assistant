@@ -341,7 +341,10 @@ def analyze_letter_with_llm(
 
     return call_llm_provider(prompt)
 
-def extract_text_from_image_with_llm(img_base64: str) -> str:
+def extract_text_from_image_with_llm(
+    img_base64: str,
+    media_type: str = "image/png",
+) -> str:
     """
     Extract text from a base64-encoded image using GPT-4o Vision.
     Used for scanned or image-based PDFs.
@@ -357,7 +360,8 @@ def extract_text_from_image_with_llm(img_base64: str) -> str:
                     {
                         "type": "image_url",
                         "image_url": {
-                            "url": f"data:image/png;base64,{img_base64}"
+                            "url": f"data:{media_type};base64,{img_base64}",
+                            "detail": "high",
                         }
                     },
                     {
